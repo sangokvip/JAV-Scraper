@@ -59,7 +59,12 @@ def extract_from_missav(avid: str, domain: str = 'missav.ai'):
     playlist_url = f"https://surrit.com/{uuid}/playlist.m3u8"
     
     try:
-        pl_resp = cffi_requests.get(playlist_url, timeout=10, impersonate="chrome120")
+        surrit_headers = {
+            **HEADERS,
+            'Origin': 'https://missav.ai',
+            'Referer': 'https://missav.ai/',
+        }
+        pl_resp = cffi_requests.get(playlist_url, headers=surrit_headers, timeout=10, impersonate="chrome120")
         if pl_resp.status_code != 200:
             return None, "无法获取播放列表"
         
@@ -209,37 +214,68 @@ def get_sources():
 @app.route('/proxy/<domain>/<path:path>')
 def proxy_request(domain, path):
     """代理请求"""
+    from urllib.parse import urlparse, unquote
+    import base64
+    from flask import make_response
+    
     query_string = request.query_string.decode()
     target_url = f"https://{domain}/{path}"
     if query_string:
         target_url += f"?{query_string}"
     
     referer = request.headers.get('Referer', '')
+    origin = None
     if 'jable' in domain:
         referer = f'https://{domain}/'
     elif 'missav' in domain or 'surrit' in domain:
         referer = 'https://missav.ai/'
+        origin = 'https://missav.ai'
     
     headers = {**HEADERS, 'Referer': referer}
+    if origin:
+        headers['Origin'] = origin
     
     try:
         resp = cffi_requests.get(
             target_url,
             headers=headers,
             proxies={'http': PROXY, 'https': PROXY} if PROXY else None,
-            stream=True,
             timeout=30,
             impersonate="chrome120"
         )
         
+        content = resp.content
+        content_type = resp.headers.get('Content-Type', '').lower()
+        
+        if 'mpegurl' in content_type or 'm3u8' in content_type or path.endswith('.m3u8'):
+            content_text = content.decode('utf-8')
+            base_url = target_url.rsplit('/', 1)[0]
+            
+            lines = content_text.split('\n')
+            new_lines = []
+            for line in lines:
+                stripped = line.strip()
+                if stripped and not stripped.startswith('#'):
+                    if not stripped.startswith('http://') and not stripped.startswith('https://'):
+                        new_lines.append(f"/proxy/{domain}{urlparse(base_url).path}/{stripped}")
+                    else:
+                        parsed = urlparse(stripped)
+                        encoded_url = base64.b64encode(stripped.encode('utf-8')).decode('utf-8')
+                        new_lines.append(f"/proxy2?url={encoded_url}")
+                else:
+                    new_lines.append(line)
+            
+            content = '\n'.join(new_lines).encode('utf-8')
+        
+        response = make_response(content)
+        response.status_code = resp.status_code
+        
         excluded = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-        resp_headers = [(n, v) for (n, v) in resp.headers.items() if n.lower() not in excluded]
+        for n, v in resp.headers.items():
+            if n.lower() not in excluded:
+                response.headers[n] = v
         
-        def generate():
-            for chunk in resp.iter_content(chunk_size=1024):
-                yield chunk
-        
-        return Response(generate(), status=resp.status_code, headers=resp_headers)
+        return response
         
     except Exception as e:
         return Response(f'Proxy error: {str(e)}', status=500)
@@ -279,12 +315,16 @@ def proxy_request2():
     parsed = urlparse(url)
     
     referer = request.headers.get('Referer', '')
+    origin = None
     if 'jable' in parsed.netloc:
         referer = f'https://{parsed.netloc}/'
     elif 'missav' in parsed.netloc or 'surrit' in parsed.netloc or 'mushroom' in parsed.netloc:
         referer = 'https://missav.ai/'
+        origin = 'https://missav.ai'
     
     headers = {**HEADERS, 'Referer': referer}
+    if origin:
+        headers['Origin'] = origin
     
     try:
         resp = cffi_requests.get(

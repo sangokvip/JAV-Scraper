@@ -1,0 +1,45 @@
+{
+  "protocol_version": "1.0",
+  "plugin": {
+    "id": "video.javdb",
+    "name": "JAVDB",
+    "version": "1.0.0",
+    "entrypoint": "./ultimate_provider.py:JavdbProvider",
+    "config_key": "javdb"
+  },
+  "media_types": ["video"],
+  "capabilities": [
+    { "key": "catalog.search" },
+    { "key": "catalog.detail" },
+    { "key": "catalog.by_code" },
+    { "key": "person.search" },
+    { "key": "person.works" },
+    { "key": "collection.list" },
+    { "key": "collection.detail" },
+    { "key": "taxonomy.tags" },
+    { "key": "taxonomy.tag_search" },
+    { "key": "health.query.status" }
+  ],
+  "configuration": {
+    "order": 30,
+    "label": "JAVDB",
+    "sections": [
+      {
+        "id": "basic",
+        "label": "基础配置",
+        "fields": [
+          { "key": "enabled", "label": "启用", "type": "boolean" },
+          { "key": "domain_index", "label": "域名索引", "type": "number", "placeholder": "0" },
+          { "key": "cookie_string", "label": "Cookie(_jdb_session)", "type": "textarea", "placeholder": "REDACTED_COOKIE", "secret": true }
+        ]
+      }
+    ],
+    "helper_urls": {
+      "javdb_cookie_guide": "/api/v1/config/javdb-cookie-guide"
+    }
+  },
+  "compatibility": {
+    "legacy_adapter_name": "javdb",
+    "legacy_platforms": ["javdb", "JAVDB"]
+  }
+}

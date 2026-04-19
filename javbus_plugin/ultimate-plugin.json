@@ -1,0 +1,25 @@
+{
+  "protocol_version": "1.0",
+  "plugin": {
+    "id": "video.javbus",
+    "name": "JAVBUS",
+    "version": "1.0.0",
+    "entrypoint": "../ultimate_provider.py:JavbusProvider"
+  },
+  "media_types": ["video"],
+  "capabilities": [
+    { "key": "catalog.search" },
+    { "key": "catalog.detail" },
+    { "key": "person.search" },
+    { "key": "person.works" },
+    { "key": "health.query.status" }
+  ],
+  "configuration": {
+    "order": 40,
+    "label": "JAVBUS",
+    "sections": []
+  },
+  "compatibility": {
+    "legacy_platforms": ["javbus", "JAVBUS"]
+  }
+}

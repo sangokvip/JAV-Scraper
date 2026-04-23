@@ -475,20 +475,28 @@ class JavdbAPI:
     
     def _extract_preview_video(self, soup: BeautifulSoup) -> str:
         """提取预览视频链接"""
-        video_elem = soup.select_one('video source, video')
-        if video_elem:
-            src = video_elem.get('src')
-            if src:
-                return src
-        
-        video_container = soup.select_one('.preview-video, .video-preview')
-        if video_container:
-            video = video_container.select_one('video')
-            if video:
-                src = video.get('src') or video.get('data-src')
-                if src:
+        for selector, attr_names in (
+            ('video source', ('src', 'data-src')),
+            ('video', ('src', 'data-src')),
+            ('.preview-video video source', ('src', 'data-src')),
+            ('.preview-video video', ('src', 'data-src')),
+            ('.video-preview video source', ('src', 'data-src')),
+            ('.video-preview video', ('src', 'data-src')),
+            ('source[type=\"application/x-mpegURL\"]', ('src', 'data-src')),
+            ('source[type^=\"video/\"]', ('src', 'data-src')),
+            ('[data-url]', ('data-url',)),
+        ):
+            for node in soup.select(selector):
+                for attr_name in attr_names:
+                    src = str(node.get(attr_name, '') or '').strip()
+                    if not src:
+                        continue
+                    if src.startswith('//'):
+                        return f'https:{src}'
+                    if src.startswith('/'):
+                        return urljoin(self.base_url, src)
                     return src
-        
+
         return ""
     
     def _parse_size(self, size_text: str) -> float:

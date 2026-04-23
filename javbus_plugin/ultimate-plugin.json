@@ -10,7 +10,8 @@
   "identity": {
     "content_type": "video",
     "host_id_prefix": "JAVBUS",
-    "platform_label": "JAVBUS"
+    "platform_label": "JAVBUS",
+    "aliases": ["javbus"]
   },
   "presentation": {
     "media_card": {
@@ -35,9 +36,6 @@
     "order": 40,
     "label": "JAVBUS",
     "sections": []
-  },
-  "compatibility": {
-    "legacy_platforms": ["javbus", "JAVBUS"]
   },
   "resource_policy": {
     "assets": {

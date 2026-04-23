@@ -11,7 +11,8 @@
   "identity": {
     "content_type": "video",
     "host_id_prefix": "JAVDB",
-    "platform_label": "JAVDB"
+    "platform_label": "JAVDB",
+    "aliases": ["javdb"]
   },
   "presentation": {
     "media_card": {
@@ -69,10 +70,6 @@
       "file": "./helpers/cookie_guide/index.html",
       "root_dir": "./helpers/cookie_guide"
     }
-  },
-  "compatibility": {
-    "legacy_adapter_name": "javdb",
-    "legacy_platforms": ["javdb", "JAVDB"]
   },
   "resource_policy": {
     "assets": {

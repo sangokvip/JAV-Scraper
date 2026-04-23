@@ -8,6 +8,24 @@
     "config_key": "javdb"
   },
   "media_types": ["video"],
+  "identity": {
+    "content_type": "video",
+    "host_id_prefix": "JAVDB",
+    "platform_label": "JAVDB"
+  },
+  "presentation": {
+    "media_card": {
+      "cover": {
+        "aspect_ratio": "16 / 9",
+        "mobile_aspect_ratio": "3 / 2",
+        "fit": "cover"
+      },
+      "badge": {
+        "show_platform_label": true,
+        "label": "JAVDB"
+      }
+    }
+  },
   "capabilities": [
     { "key": "catalog.search" },
     { "key": "catalog.detail" },
@@ -34,12 +52,59 @@
         ]
       }
     ],
-    "helper_urls": {
-      "javdb_cookie_guide": "/api/v1/config/javdb-cookie-guide"
+    "actions": [
+      {
+        "key": "auth.open_cookie_guide",
+        "scope": "configuration",
+        "label": "打开 Cookie 获取教程页",
+        "description": "打开内置的 JAVDB Cookie 获取教程页面。",
+        "kind": "open_url",
+        "helper_key": "javdb_cookie_guide"
+      }
+    ]
+  },
+  "helpers": {
+    "javdb_cookie_guide": {
+      "kind": "static_page",
+      "file": "./helpers/cookie_guide/index.html",
+      "root_dir": "./helpers/cookie_guide"
     }
   },
   "compatibility": {
     "legacy_adapter_name": "javdb",
     "legacy_platforms": ["javdb", "JAVDB"]
+  },
+  "resource_policy": {
+    "assets": {
+      "image": {
+        "request_profiles": [
+          {
+            "match_hosts": ["javdb.com", "jdbstatic.com"],
+            "referer": "https://javdb.com/",
+            "cookie_config_key": "javdb",
+            "cookie_field_path": "cookies"
+          }
+        ]
+      },
+      "preview_video": {
+        "available": true,
+        "download_enabled": true,
+        "refresh_hint": {
+          "mode": "signed_query_expire",
+          "match_hosts": ["javdb.com", "jdbstatic.com"],
+          "query_param": "t",
+          "lead_seconds": 120,
+          "refresh_when_missing": true
+        },
+        "request_profiles": [
+          {
+            "match_hosts": ["javdb.com", "jdbstatic.com"],
+            "referer": "https://javdb.com/",
+            "cookie_config_key": "javdb",
+            "cookie_field_path": "cookies"
+          }
+        ]
+      }
+    }
   }
 }

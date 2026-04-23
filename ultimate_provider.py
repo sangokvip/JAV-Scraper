@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from typing import Any, Dict, List
 
+from bs4 import BeautifulSoup, FeatureNotFound
 
 CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))
 THIRD_PARTY_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
@@ -94,6 +96,24 @@ class _VideoProviderBase(ProtocolProvider):
     def get_query_status(self, config: Dict[str, Any]) -> Dict[str, Any]:
         return get_adapter_credential_status("javdb", config)
 
+    def _build_health_status_payload(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        status = self.get_query_status(config)
+        cookies = config.get("cookies") or {}
+        normalized_cookies: Dict[str, str] = {}
+        if isinstance(cookies, dict):
+            for raw_key, raw_value in cookies.items():
+                key = str(raw_key or "").strip()
+                value = str(raw_value or "").strip()
+                if key and value:
+                    normalized_cookies[key] = value
+
+        return {
+            "configured": bool(status.get("configured", False)),
+            "cookie_keys": sorted(normalized_cookies.keys()),
+            "has_session_cookie": bool(status.get("configured", False)),
+            "message": str(status.get("message") or ""),
+        }
+
     def _get_tag_bundle(self, adapter) -> Dict[str, Any]:
         tag_manager = getattr(getattr(adapter, "api", None), "tag_manager", None)
         if tag_manager is None:
@@ -104,6 +124,120 @@ class _VideoProviderBase(ProtocolProvider):
         return {
             "tags": tag_manager.get_all_tags() or {},
             "categories": tag_manager.get_categories() or {},
+        }
+
+    @staticmethod
+    def _parse_tag_ids(tag_ids) -> tuple[Dict[str, List[int]], List[str], List[str], List[str]]:
+        tag_params: Dict[str, List[int]] = {}
+        invalid_tag_ids: List[str] = []
+
+        for raw_tag_id in tag_ids or []:
+            normalized = str(raw_tag_id or "").strip().lower()
+            if not normalized:
+                continue
+
+            category, sep, value = normalized.partition("=")
+            category = category.strip()
+            raw_values = value.strip()
+
+            if not sep or not re.fullmatch(r"c\d+", category):
+                invalid_tag_ids.append(str(raw_tag_id))
+                continue
+
+            values: List[int] = []
+            for part in raw_values.split(","):
+                value_part = part.strip()
+                if not value_part or not value_part.isdigit():
+                    continue
+                values.append(int(value_part))
+
+            if not values:
+                invalid_tag_ids.append(str(raw_tag_id))
+                continue
+
+            tag_params.setdefault(category, [])
+            for parsed_value in values:
+                if parsed_value not in tag_params[category]:
+                    tag_params[category].append(parsed_value)
+
+        def _category_sort_key(category_key: str):
+            suffix = category_key[1:]
+            return int(suffix) if suffix.isdigit() else 999
+
+        effective_tag_ids: List[str] = []
+        for category_key in sorted(tag_params.keys(), key=_category_sort_key):
+            for value_item in tag_params[category_key]:
+                effective_tag_ids.append(f"{category_key}={value_item}")
+
+        return tag_params, effective_tag_ids, invalid_tag_ids, []
+
+    @staticmethod
+    def _build_tag_query(tag_params: Dict[str, List[int]]) -> str:
+        query_parts: List[str] = []
+
+        def _category_sort_key(category_key: str):
+            suffix = category_key[1:]
+            return int(suffix) if suffix.isdigit() else 999
+
+        for category_key in sorted(tag_params.keys(), key=_category_sort_key):
+            values = tag_params.get(category_key) or []
+            if not values:
+                continue
+            query_parts.append(f"{category_key}={','.join(str(v) for v in values)}")
+
+        return "&".join(query_parts)
+
+    @staticmethod
+    def _is_login_page(html_text: str) -> bool:
+        if not html_text:
+            return False
+
+        lower_html = str(html_text).lower()
+        title_match = re.search(r"<title[^>]*>(.*?)</title>", lower_html, re.DOTALL)
+        title_text = title_match.group(1).strip() if title_match else ""
+        return "登入 | javdb" in title_text or "login | javdb" in title_text
+
+    def _is_tag_search_available(self, adapter) -> bool:
+        try:
+            response = adapter.api.get("/tags")
+            return not self._is_login_page(response.text)
+        except Exception:
+            return True
+
+    def _search_by_tag_params(self, adapter, page: int, tag_params: Dict[str, List[int]]) -> Dict[str, Any]:
+        query_string = self._build_tag_query(tag_params)
+        if not query_string:
+            raise ValueError("empty tag query")
+
+        path = f"/tags?{query_string}" if page <= 1 else f"/tags?{query_string}&page={page}"
+        response = adapter.api.get(path)
+        html_text = response.text or ""
+        if self._is_login_page(html_text):
+            raise PermissionError("JAVDB 标签搜索需要登录，请更新 cookies 后重试")
+
+        try:
+            soup = BeautifulSoup(html_text, "lxml")
+        except FeatureNotFound:
+            soup = BeautifulSoup(html_text, "html.parser")
+
+        items = soup.select("div.item a")
+        parse_work = getattr(adapter.api, "_parse_work_item", None)
+        works: List[Dict[str, Any]] = []
+        if callable(parse_work):
+            for item in items:
+                try:
+                    work = parse_work(item)
+                    if work:
+                        works.append(work)
+                except Exception:
+                    continue
+
+        has_next = soup.select_one('nav.pagination a[rel="next"]') is not None
+        return {
+            "page": page,
+            "has_next": has_next,
+            "works": works,
+            "query": query_string,
         }
 
 
@@ -123,22 +257,26 @@ class JavdbProvider(_VideoProviderBase):
         return WrappedJavdbAdapter(existing_tags, domain_index=domain_index)
 
     def execute(self, capability: str, params: Dict[str, Any], context: Dict[str, Any], config: Dict[str, Any]):
-        adapter = self.get_legacy_client(config, params.get("existing_tags") or [])
         if capability == "catalog.search":
+            adapter = self.get_legacy_client(config, params.get("existing_tags") or [])
             return adapter.search_videos(
                 str(params.get("keyword") or ""),
                 page=int(params.get("page", 1) or 1),
                 max_pages=int(params.get("max_pages", 1) or 1),
             )
         if capability == "catalog.detail":
+            adapter = self.get_legacy_client(config, params.get("existing_tags") or [])
             return adapter.get_video_detail(str(params.get("video_id") or ""))
         if capability == "catalog.by_code":
+            adapter = self.get_legacy_client(config, params.get("existing_tags") or [])
             if not hasattr(adapter, "get_video_by_code"):
                 return None
             return adapter.get_video_by_code(str(params.get("code") or ""))
         if capability == "person.search":
+            adapter = self.get_legacy_client(config, params.get("existing_tags") or [])
             return adapter.search_actor(str(params.get("actor_name") or ""))
         if capability == "person.works":
+            adapter = self.get_legacy_client(config, params.get("existing_tags") or [])
             return adapter.get_actor_works(
                 str(params.get("actor_id") or ""),
                 page=int(params.get("page", 1) or 1),
@@ -151,15 +289,124 @@ class JavdbProvider(_VideoProviderBase):
         if capability == "collection.favorites":
             return self._get_collection_client(config).get_favorites()
         if capability == "taxonomy.tags":
-            return self._get_tag_bundle(adapter)
+            keyword = str(params.get("keyword") or "").strip().lower()
+            category_filter = str(params.get("category") or "").strip().lower()
+            health_status = self._build_health_status_payload(config)
+            if not health_status.get("configured"):
+                return {
+                    "categories": [],
+                    "tags": [],
+                    "total": 0,
+                    "source_ready": False,
+                    "tag_search_available": False,
+                    "cookie_configured": False,
+                    "message": str(health_status.get("message") or "未配置cookie，请先在系统配置中填写JAVDB cookie"),
+                }
+
+            adapter = self.get_legacy_client(config, params.get("existing_tags") or [])
+            tag_bundle = self._get_tag_bundle(adapter)
+            all_tags = tag_bundle.get("tags") or {}
+            categories = tag_bundle.get("categories") or {}
+            tag_search_available = self._is_tag_search_available(adapter)
+
+            if not all_tags:
+                return {
+                    "categories": [],
+                    "tags": [],
+                    "total": 0,
+                    "source_ready": False,
+                    "tag_search_available": tag_search_available,
+                    "cookie_configured": True,
+                    "message": "JAVDB 内置标签库未初始化（缺少 tags_database.enc）",
+                }
+
+            tags: List[Dict[str, Any]] = []
+            category_counts: Dict[str, int] = {}
+            for tag_id, tag_info in all_tags.items():
+                category = str(tag_info.get("category") or "").strip().lower()
+                category_name = tag_info.get("category_name") or categories.get(category, "")
+                tag_name = str(tag_info.get("name") or "").strip()
+
+                if category_filter and category != category_filter:
+                    continue
+
+                searchable_text = f"{tag_name} {tag_id}".lower()
+                if keyword and keyword not in searchable_text:
+                    continue
+
+                category_counts[category] = category_counts.get(category, 0) + 1
+                tags.append(
+                    {
+                        "id": str(tag_id),
+                        "name": tag_name,
+                        "category": category,
+                        "category_name": category_name,
+                        "tag_id": str(tag_info.get("tag_id") or ""),
+                        "value": str(tag_info.get("value") or ""),
+                    }
+                )
+
+            tags.sort(key=lambda item: (item.get("category", ""), item.get("name", "")))
+
+            response_categories: List[Dict[str, Any]] = []
+            for category_key, category_name in sorted(categories.items(), key=lambda item: item[0]):
+                if category_filter and category_key != category_filter:
+                    continue
+                count = category_counts.get(category_key, 0)
+                if keyword and count == 0:
+                    continue
+                response_categories.append(
+                    {
+                        "key": category_key,
+                        "name": category_name,
+                        "count": count,
+                    }
+                )
+
+            return {
+                "categories": response_categories,
+                "tags": tags,
+                "total": len(tags),
+                "source_ready": True,
+                "tag_search_available": tag_search_available,
+                "cookie_configured": True,
+            }
         if capability == "taxonomy.tag_search":
-            return adapter.search_by_tags(
-                page=int(params.get("page", 1) or 1),
-                max_pages=int(params.get("max_pages", 1) or 1),
-                **dict(params.get("tag_params") or {}),
+            requested_tag_ids = params.get("tag_ids") or []
+            if isinstance(requested_tag_ids, str):
+                requested_tag_ids = [part.strip() for part in requested_tag_ids.split(",") if part.strip()]
+            elif not isinstance(requested_tag_ids, list):
+                requested_tag_ids = []
+
+            tag_params, effective_tag_ids, invalid_tag_ids, overridden_tag_ids = self._parse_tag_ids(requested_tag_ids)
+            if not tag_params:
+                raise ValueError("请至少提供一个有效 tag_id（格式如 c1=23）")
+
+            adapter = self.get_legacy_client(config, params.get("existing_tags") or [])
+            if not self._is_tag_search_available(adapter):
+                raise PermissionError("JAVDB 标签搜索需要登录，请更新 cookies 后重试")
+
+            result = self._search_by_tag_params(
+                adapter,
+                page=max(int(params.get("page", 1) or 1), 1),
+                tag_params=tag_params,
             )
+            works = [dict(item or {}) for item in (result.get("works") or []) if isinstance(item, dict)]
+            return {
+                "platform": self.PLATFORM_NAME,
+                "page": result.get("page", 1),
+                "has_next": result.get("has_next", False),
+                "total_pages": result.get("total_pages"),
+                "videos": works,
+                "works": works,
+                "query": result.get("query"),
+                "requested_tag_ids": list(requested_tag_ids),
+                "effective_tag_ids": effective_tag_ids,
+                "invalid_tag_ids": invalid_tag_ids,
+                "overridden_tag_ids": overridden_tag_ids,
+            }
         if capability == "health.query.status":
-            return self.get_query_status(config)
+            return self._build_health_status_payload(config)
         raise ValueError(f"unsupported capability: {capability}")
 
 
@@ -195,4 +442,3 @@ class JavbusProvider(ProtocolProvider):
                 "missing_fields": [],
             }
         raise ValueError(f"unsupported capability: {capability}")
-

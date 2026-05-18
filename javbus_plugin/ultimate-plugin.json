@@ -65,7 +65,18 @@
       }
     }
   },
+  "runtime": {
+    "python_paths": ["..", "../lib"],
+    "vendor_path_templates": [
+      "../vendor/python",
+      "../vendor/python/{python_tag}",
+      "../vendor/python/{python_tag}/{platform_tag}"
+    ]
+  },
   "packaging": {
+    "external": {
+      "pip_requirements": ["curl_cffi>=0.6.0", "cffi>=1.15.0", "lxml>=4.9.0"]
+    },
     "pyinstaller": {
       "collect_all": ["curl_cffi", "cffi", "lxml"],
       "pip_requirements": ["curl_cffi>=0.6.0", "cffi>=1.15.0", "lxml>=4.9.0"]

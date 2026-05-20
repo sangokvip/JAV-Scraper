@@ -34,7 +34,7 @@ if os.path.exists(JAVDB_UTILS_PATH) and "utils" not in sys.modules:
         sys.modules["utils"] = module
 
 from protocol.base import ProtocolProvider
-from third_party.credential_guard import get_adapter_credential_status
+from protocol.credential_guard import get_adapter_credential_status
 from javdb_api import JavdbAPI
 from lib.javbus_adapter import JavbusAdapter as PluginJavbusAdapter
 from lib.javdb_adapter import JavdbAdapter as PluginJavdbAdapter

@@ -108,6 +108,7 @@ class JavdbAdapter(BaseAdapter):
                 "date": detail.get("date", ""),
                 "tags": detail.get("tags", []),
                 "actors": detail.get("actors", []),
+                "actor_refs": detail.get("actor_refs", []),
                 "series": detail.get("series", ""),
                 "magnets": detail.get("magnets", []),
                 "thumbnail_images": detail.get("thumbnail_images", []),
@@ -141,6 +142,7 @@ class JavdbAdapter(BaseAdapter):
                 "date": detail.get("date", ""),
                 "tags": detail.get("tags", []),
                 "actors": detail.get("actors", []),
+                "actor_refs": detail.get("actor_refs", []),
                 "series": detail.get("series", ""),
                 "magnets": detail.get("magnets", []),
                 "thumbnail_images": detail.get("thumbnail_images", []),
@@ -162,7 +164,24 @@ class JavdbAdapter(BaseAdapter):
             演员列表
         """
         try:
-            return self.api.search_actor(actor_name)
+            actors = self.api.search_actor(actor_name)
+            normalized_actors = []
+            for actor in actors or []:
+                if not isinstance(actor, dict):
+                    continue
+                actor_id = str(actor.get("actor_id") or actor.get("id") or "").strip()
+                name = str(actor.get("actor_name") or actor.get("name") or "").strip()
+                if not actor_id:
+                    continue
+                normalized_actors.append({
+                    **actor,
+                    "id": actor_id,
+                    "name": name,
+                    "actor_id": actor_id,
+                    "actor_name": name,
+                    "actor_url": actor.get("actor_url") or actor.get("url") or "",
+                })
+            return normalized_actors
         except Exception as e:
             print(f"搜索演员失败: {e}")
             return []

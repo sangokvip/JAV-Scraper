@@ -295,7 +295,9 @@ class JavdbAPI:
         date = self._extract_date(soup)
         tags = self._extract_tags(soup)
         series = self._extract_series(soup)
-        actors = self._extract_actors(soup)
+        actor_entries = self._extract_actor_entries(soup)
+        actors = [entry.get("actor_name", "") for entry in actor_entries if entry.get("actor_name")]
+        actor_refs = [entry for entry in actor_entries if entry.get("actor_id")]
         magnets = self._extract_magnets(soup)
         thumbnail_images = DataProcessor.extract_hd_thumbnails(video_id, soup)
         preview_video = self._extract_preview_video(soup)
@@ -312,6 +314,7 @@ class JavdbAPI:
             'tags': tags,
             'series': series,
             'actors': actors,
+            'actor_refs': actor_refs,
             'magnets': magnets,
             'thumbnail_images': thumbnail_images,
             'preview_video': preview_video,
@@ -423,9 +426,9 @@ class JavdbAPI:
                     return date_match.group(1)
         return ""
     
-    def _extract_actors(self, soup: BeautifulSoup) -> List[str]:
-        """提取演员列表"""
-        actors = []
+    def _extract_actor_entries(self, soup: BeautifulSoup) -> List[Dict]:
+        """提取演员列表及演员页 ID。"""
+        actor_entries = []
         
         tag_sections = soup.select('.panel-block')
         for section in tag_sections:
@@ -434,11 +437,31 @@ class JavdbAPI:
                 actor_links = section.select('a')
                 for actor_link in actor_links:
                     actor_name = actor_link.get_text(strip=True)
-                    if actor_name and actor_name not in ['♀', '♂']:
-                        actors.append(actor_name)
+                    if not actor_name or actor_name in ['♀', '♂']:
+                        continue
+
+                    href = str(actor_link.get('href') or '').strip()
+                    match = re.search(r'/actors/([^/?#]+)', href)
+                    actor_id = match.group(1) if match else ''
+                    entry = {
+                        'id': actor_id,
+                        'actor_id': actor_id,
+                        'name': actor_name,
+                        'actor_name': actor_name,
+                        'actor_url': urljoin(self.base_url, href) if href else '',
+                    }
+                    actor_entries.append(entry)
                 break
         
-        return actors
+        return actor_entries
+
+    def _extract_actors(self, soup: BeautifulSoup) -> List[str]:
+        """提取演员名称列表。"""
+        return [
+            entry.get('actor_name', '')
+            for entry in self._extract_actor_entries(soup)
+            if entry.get('actor_name')
+        ]
     
     def _extract_magnets(self, soup: BeautifulSoup) -> List[Dict]:
         """提取磁力链接"""
@@ -520,18 +543,20 @@ class JavdbAPI:
         Returns:
             演员列表，每个演员包含 name, actor_id, url
         """
-        encoded_name = quote(actor_name)
+        normalized_actor_name = str(actor_name or "").strip()
+        encoded_name = quote(normalized_actor_name)
         url = f"/search?q={encoded_name}&f=actor"
         
         response = self.get(url)
         soup = BeautifulSoup(response.text, 'lxml')
         
         actors = []
-        actor_items = soup.select('.actor-box, .actors .item')
+        actor_items = soup.select('.actor-box, .actors .item, a[href^="/actors/"]')
+        seen_actor_ids = set()
         
         for item in actor_items:
             try:
-                link_elem = item.select_one('a')
+                link_elem = item if getattr(item, "name", "") == "a" else item.select_one('a[href^="/actors/"]')
                 if not link_elem:
                     continue
                 
@@ -546,26 +571,48 @@ class JavdbAPI:
                     continue
                 
                 actor_id = actor_id_match.group(1)
+                if actor_id in seen_actor_ids:
+                    continue
                 
-                names = [n.strip() for n in title.split(',')]
+                raw_names = []
+                if title:
+                    raw_names.extend(title.split(','))
+                text_name = link_elem.get_text(" ", strip=True)
+                if text_name:
+                    raw_names.extend(text_name.split(','))
+                img_elem = link_elem.select_one('img')
+                if img_elem:
+                    raw_names.extend(str(img_elem.get('alt') or '').split(','))
+                names = []
+                for raw_name in raw_names:
+                    name = str(raw_name or "").strip()
+                    if name and name not in names:
+                        names.append(name)
+                
                 matched_name = None
-                
                 for name in names:
-                    if name == actor_name:
+                    if name == normalized_actor_name:
                         matched_name = name
                         break
-                
+                if not matched_name and names:
+                    matched_name = names[0]
                 if not matched_name:
                     continue
                 
+                seen_actor_ids.add(actor_id)
                 actors.append({
+                    'id': actor_id,
+                    'name': matched_name,
                     'actor_name': matched_name,
                     'actor_id': actor_id,
                     'actor_url': urljoin(self.base_url, href),
+                    'aliases': names,
                 })
             except:
                 continue
         
+        exact_name = normalized_actor_name.casefold()
+        actors.sort(key=lambda item: 0 if str(item.get('actor_name') or '').casefold() == exact_name else 1)
         return actors
     
     # ==================== 演员作品（分页） ====================

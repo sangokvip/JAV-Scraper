@@ -294,11 +294,20 @@ class _VideoProviderBase(ProtocolProvider):
 class JavdbProvider(_VideoProviderBase):
     PLATFORM_NAME = "javdb"
 
+    def normalize_config(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = super().normalize_config(payload)
+        normalized["domain_index"] = JavdbAPI.normalize_domain_index(normalized.get("domain_index", 0))
+        return normalized
+
+    @staticmethod
+    def _get_domain_index(config: Dict[str, Any]) -> int:
+        return JavdbAPI.normalize_domain_index((config or {}).get("domain_index", 0))
+
     def _get_collection_api(self, config: Dict[str, Any]) -> JavdbAPI:
         status = self.get_query_status(config)
         if not bool(status.get("configured", False)):
             raise RuntimeError(str(status.get("message") or "JAVDB 平台未配置 cookie"))
-        domain_index = int((config or {}).get("domain_index", 0) or 0)
+        domain_index = self._get_domain_index(config)
         api = JavdbAPI(domain_index=domain_index)
         self._apply_config_cookies(api, config)
         return api
@@ -308,7 +317,7 @@ class JavdbProvider(_VideoProviderBase):
         if not bool(status.get("configured", False)):
             raise RuntimeError(str(status.get("message") or "JAVDB 平台未配置 cookie"))
         existing_tags = self._extract_existing_tags(*args, **kwargs)
-        domain_index = int((config or {}).get("domain_index", 0) or 0)
+        domain_index = self._get_domain_index(config)
         adapter = PluginJavdbAdapter(existing_tags, domain_index=domain_index)
         self._apply_config_cookies(adapter, config)
         return adapter

@@ -79,7 +79,7 @@ class JavdbAPI:
         Args:
             domain_index: 域名索引，用于自动切换域名
         """
-        self.domain_index = domain_index
+        self.domain_index = self.normalize_domain_index(domain_index)
         self.session = requests.Session()
         self.session.headers.update(config.HEADERS)
         
@@ -176,7 +176,34 @@ class JavdbAPI:
     @property
     def base_url(self) -> str:
         """获取当前基础 URL"""
-        return f"https://{config.JAVDB['domains'][self.domain_index]}"
+        domains = list(config.JAVDB.get('domains') or [])
+        if not domains:
+            raise RuntimeError("JAVDB 域名列表为空")
+        self.domain_index = self.normalize_domain_index(self.domain_index)
+        return f"https://{domains[self.domain_index]}"
+
+    @staticmethod
+    def normalize_domain_index(domain_index: Any) -> int:
+        """Normalize user-provided domain index into the available domain range."""
+        domains = list(config.JAVDB.get('domains') or [])
+        if not domains:
+            return 0
+        fallback = 0
+        try:
+            fallback = int(config.JAVDB.get('default_domain_index', 0) or 0)
+        except (TypeError, ValueError):
+            fallback = 0
+        if fallback < 0 or fallback >= len(domains):
+            fallback = 0
+        try:
+            normalized = int(domain_index or 0)
+        except (TypeError, ValueError):
+            normalized = fallback
+        if normalized < 0:
+            return fallback
+        if normalized >= len(domains):
+            return fallback
+        return normalized
     
     def _load_cookies(self):
         """从文件加载 cookies"""
@@ -197,7 +224,11 @@ class JavdbAPI:
     
     def _switch_domain(self):
         """切换到下一个域名"""
-        self.domain_index = (self.domain_index + 1) % len(config.JAVDB['domains'])
+        domains = list(config.JAVDB.get('domains') or [])
+        if not domains:
+            self.domain_index = 0
+            return
+        self.domain_index = (self.normalize_domain_index(self.domain_index) + 1) % len(domains)
     
     def request(self, method: str, path: str, **kwargs) -> requests.Response:
         """

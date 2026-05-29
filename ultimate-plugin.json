@@ -48,7 +48,7 @@
         "label": "基础配置",
         "fields": [
           { "key": "enabled", "label": "启用", "type": "boolean" },
-          { "key": "domain_index", "label": "域名索引", "type": "number", "placeholder": "0" },
+          { "key": "domain_index", "label": "域名索引（0-2）", "type": "number", "placeholder": "0" },
           { "key": "cookie_string", "label": "Cookie(_jdb_session)", "type": "textarea", "placeholder": "REDACTED_COOKIE", "secret": true }
         ]
       }

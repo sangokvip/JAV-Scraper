@@ -526,6 +526,17 @@
   - 仅影响 JavBus 的样品大图 URL 返回，经确认无其他影响。
 - **回滚点**: `git reset --hard HEAD~1`
 
+### 51) Feature: 接入 JavBus 备用 JSON API 作为首选刮削源，支持超时自动降级
+- **变更文件**: `lib/javbus_adapter.py`
+- **背景与目标**: 实现用户期望在 JavBus 首选刮削时直接对接高性能 Vercel JSON API，以极大提升国内环境直连的刮削效率和响应时间。
+- **技术实施**:
+  - **声明 API 端点及发包器**：引入 `API_BASE_URL = "https://javbus-api-2026.vercel.app"` 类属性，并设计了专用的 API 请求工具 `_get_api`。
+  - **API-First 刮削流程及无缝降级**：重载了 `get_video_detail`、`search_videos`、`get_movie_magnets`、`get_movies_by_page` 以及 `get_actor_works` 接口。优先通过对应 API 端点拉取并格式化返回；若 API 返回 5xx、超时（限时 8 秒）或连接不可达，自动无感降级到已有的网页 HTML 轮灾爬虫解析逻辑，保障了高可用和性能的完美平衡。
+- **风险自查**:
+  - 全量接口结构、字段定义保持与旧版 100% 物理一致。
+  - 破坏 API 地址进行测试，自动安全降级为网页解析且无阻断。
+- **回滚点**: `git reset --hard HEAD~1`
+
 
 
 

@@ -20,6 +20,7 @@ class JavbusAdapter(BaseAdapter):
     """JavBus 平台适配器"""
     
     BASE_URL = "https://www.javbus.com"
+    API_BASE_URL = "https://javbus-api-2026.vercel.app"
     
     # 有码/无码类型
     TYPE_NORMAL = "normal"  # 有码
@@ -86,6 +87,14 @@ class JavbusAdapter(BaseAdapter):
                 except Exception:
                     continue
             raise e
+
+    def _get_api(self, path: str, **kwargs) -> Dict[str, Any]:
+        """向上游 JavBus JSON API 发送请求"""
+        url = f"{self.API_BASE_URL}{path}"
+        proxies = {'http': self.proxy, 'https': self.proxy} if self.proxy else None
+        response = self.session.get(url, proxies=proxies, timeout=8, impersonate="chrome120", **kwargs)
+        response.raise_for_status()
+        return response.json()
     
     def _parse_movie_item(self, item: BeautifulSoup) -> Optional[Dict[str, Any]]:
         """解析电影列表项"""
@@ -145,6 +154,60 @@ class JavbusAdapter(BaseAdapter):
         Returns:
             包含分页信息和视频列表的字典
         """
+        # 1. 优先尝试从 API 搜索
+        try:
+            results = []
+            current_page = page
+            has_next = True
+            while current_page < page + max_pages and has_next:
+                params = {
+                    'keyword': keyword,
+                    'magnet': 'all',
+                    'page': current_page
+                }
+                data = self._get_api("/api/movies/search", params=params)
+                if data and isinstance(data, dict) and 'movies' in data:
+                    movies_raw = data.get('movies', [])
+                    for item in movies_raw:
+                        m_id = item.get('id', '')
+                        img = item.get('img', '')
+                        if img.startswith('//'):
+                            img = 'https:' + img
+                        elif img.startswith('/') and not img.startswith('//'):
+                            img = self.current_domain + img
+                            
+                        results.append({
+                            "video_id": m_id,
+                            "code": m_id,
+                            "title": item.get('title', ''),
+                            "date": item.get('date') or None,
+                            "tags": item.get('tags', []),
+                            "actors": [],
+                            "cover_url": img,
+                            "thumbnail_url": img,
+                            "rating": "",
+                        })
+                    
+                    pagination = data.get('pagination', {})
+                    has_next = pagination.get('hasNextPage', False)
+                    if has_next and current_page < page + max_pages - 1:
+                        current_page += 1
+                    else:
+                        break
+                else:
+                    break
+            
+            if results:
+                return {
+                    "page": page,
+                    "has_next": has_next,
+                    "total_pages": None,
+                    "videos": results
+                }
+        except Exception as e:
+            print(f"JavBus API 搜索失败，将降级为网页解析: {e}")
+
+        # 2. 降级走网页 HTML 解析（原有逻辑）
         results = []
         current_page = page
         has_next = True
@@ -213,6 +276,90 @@ class JavbusAdapter(BaseAdapter):
         Returns:
             视频详情字典
         """
+        # 1. 优先尝试从 API 抓取
+        try:
+            data = self._get_api(f"/api/movies/{video_id}")
+            if data and isinstance(data, dict) and data.get('id'):
+                stars = data.get('stars', [])
+                actors = [s.get('name', '').strip() for s in stars if s.get('name')]
+                actor_list = []
+                for s in stars:
+                    s_id = s.get('id', '')
+                    s_name = s.get('name', '').strip()
+                    if s_name:
+                        actor_list.append({
+                            'name': s_name,
+                            'id': s_id,
+                            'url': f"{self.current_domain}/star/{s_id}" if s_id else ""
+                        })
+                
+                samples_raw = data.get('samples', [])
+                samples = []
+                sample_images = []
+                for s in samples_raw:
+                    thumbnail = s.get('thumbnail', '')
+                    src = s.get('src', '')
+                    if thumbnail.startswith('//'):
+                        thumbnail = 'https:' + thumbnail
+                    elif thumbnail.startswith('/') and not thumbnail.startswith('//'):
+                        thumbnail = self.current_domain + thumbnail
+                        
+                    if src.startswith('//'):
+                        src = 'https:' + src
+                    elif src.startswith('/') and not src.startswith('//'):
+                        src = self.current_domain + src
+                        
+                    sample_data = {
+                        'thumbnail': thumbnail,
+                        'alt': s.get('alt', ''),
+                    }
+                    if src:
+                        sample_data['full_image'] = src
+                    
+                    samples.append(sample_data)
+                    if thumbnail:
+                        sample_images.append(thumbnail)
+                    if src:
+                        sample_images.append(src)
+                
+                genres = [g.get('name', '').strip() for g in data.get('genres', []) if g.get('name')]
+                
+                img = data.get('img', '')
+                if img.startswith('//'):
+                    img = 'https:' + img
+                elif img.startswith('/') and not img.startswith('//'):
+                    img = self.current_domain + img
+
+                actor_avatars = {}
+                
+                return {
+                    "video_id": data.get('id'),
+                    "code": data.get('id'),
+                    "title": data.get('title', ''),
+                    "date": data.get('date') or None,
+                    "video_length": data.get('videoLength'),
+                    "director": data.get('director', {}).get('name') if data.get('director') else None,
+                    "producer": data.get('producer', {}).get('name') if data.get('producer') else None,
+                    "publisher": data.get('publisher', {}).get('name') if data.get('publisher') else None,
+                    "series": data.get('series', {}).get('name') if data.get('series') else None,
+                    "tags": genres,
+                    "tags_count": len(genres),
+                    "actors": actors,
+                    "actors_detail": actor_list,
+                    "actor_avatars": actor_avatars,
+                    "cover_url": img,
+                    "cover_hd": img if img.startswith('http') else None,
+                    "thumbnail_images": sample_images,
+                    "samples": samples,
+                    "sample_count": len(samples),
+                    "preview_video": "",
+                    "gid": data.get('gid'),
+                    "uc": data.get('uc'),
+                }
+        except Exception as e:
+            print(f"JavBus API 获取详情失败，将降级为网页解析: {e}")
+
+        # 2. 降级走网页 HTML 解析（原有逻辑）
         try:
             # 构建详情页 URL
             if movie_type == self.TYPE_UNCENSORED:
@@ -414,6 +561,40 @@ class JavbusAdapter(BaseAdapter):
         Returns:
             磁力链接列表
         """
+        # 1. 优先尝试从 API 获取磁力链接
+        try:
+            temp_gid = gid
+            temp_uc = uc
+            if not temp_gid or not temp_uc:
+                detail = self.get_video_detail(video_id)
+                if detail:
+                    temp_gid = detail.get('gid')
+                    temp_uc = detail.get('uc')
+            
+            params = {}
+            if temp_gid: params['gid'] = temp_gid
+            if temp_uc: params['uc'] = temp_uc
+            params['sortBy'] = sort_by
+            params['sortOrder'] = sort_order
+            
+            data = self._get_api(f"/api/magnets/{video_id}", params=params)
+            if data and isinstance(data, list):
+                magnets = []
+                for m in data:
+                    magnets.append({
+                        'id': m.get('id', ''),
+                        'link': m.get('link', ''),
+                        'title': m.get('title', ''),
+                        'size': m.get('size', ''),
+                        'share_date': m.get('shareDate', ''),
+                        'is_hd': m.get('isHD', False),
+                        'has_subtitle': m.get('hasSubtitle', False),
+                    })
+                return magnets
+        except Exception as e:
+            print(f"JavBus API 获取磁力失败，将降级为网页解析: {e}")
+
+        # 2. 降级走网页 HTML 解析（原有逻辑）
         if not gid or not uc:
             # 先获取详情获取 gid 和 uc
             detail = self.get_video_detail(video_id)
@@ -646,6 +827,55 @@ class JavbusAdapter(BaseAdapter):
         Returns:
             包含影片列表和分页信息的字典
         """
+        # 1. 优先尝试从 API 获取影片列表
+        try:
+            if movie_type == self.TYPE_UNCENSORED:
+                raise NotImplementedError("无码类型目前通过 HTML 降级通道解析更准确")
+                
+            params = {'page': page}
+            data = self._get_api("/api/movies", params=params)
+            if data and isinstance(data, dict) and 'movies' in data:
+                movies_raw = data.get('movies', [])
+                movies = []
+                for item in movies_raw:
+                    m_id = item.get('id', '')
+                    img = item.get('img', '')
+                    if img.startswith('//'):
+                        img = 'https:' + img
+                    elif img.startswith('/') and not img.startswith('//'):
+                        img = self.current_domain + img
+                        
+                    movies.append({
+                        "video_id": m_id,
+                        "code": m_id,
+                        "title": item.get('title', ''),
+                        "date": item.get('date') or None,
+                        "tags": item.get('tags', []),
+                        "actors": [],
+                        "cover_url": img,
+                        "thumbnail_url": img,
+                        "rating": "",
+                    })
+                
+                pagination = data.get('pagination', {})
+                curr = pagination.get('currentPage', page)
+                has_next = pagination.get('hasNextPage', False)
+                nxt = pagination.get('nextPage')
+                pages = pagination.get('pages', [page])
+                
+                return {
+                    'movies': movies,
+                    'pagination': {
+                        'current_page': curr,
+                        'has_next_page': has_next,
+                        'next_page': nxt,
+                        'pages': pages,
+                    }
+                }
+        except Exception as e:
+            print(f"JavBus API 按页获取列表失败，将降级为网页解析: {e}")
+
+        # 2. 降级走网页 HTML 解析（原有逻辑）
         try:
             # 构建 URL
             if movie_type == self.TYPE_UNCENSORED:
@@ -727,6 +957,60 @@ class JavbusAdapter(BaseAdapter):
         Returns:
             作品列表和分页信息
         """
+        # 1. 优先尝试从 API 获取演员作品列表
+        try:
+            results = []
+            current_page = page
+            has_next = True
+            while current_page <= page + max_pages - 1 and has_next:
+                params = {
+                    'filterType': 'star',
+                    'filterValue': actor_id,
+                    'page': current_page
+                }
+                data = self._get_api("/api/movies", params=params)
+                if data and isinstance(data, dict) and 'movies' in data:
+                    movies_raw = data.get('movies', [])
+                    for item in movies_raw:
+                        m_id = item.get('id', '')
+                        img = item.get('img', '')
+                        if img.startswith('//'):
+                            img = 'https:' + img
+                        elif img.startswith('/') and not img.startswith('//'):
+                            img = self.current_domain + img
+                            
+                        results.append({
+                            "video_id": m_id,
+                            "code": m_id,
+                            "title": item.get('title', ''),
+                            "date": item.get('date') or None,
+                            "tags": item.get('tags', []),
+                            "actors": [],
+                            "cover_url": img,
+                            "thumbnail_url": img,
+                            "rating": "",
+                        })
+                    
+                    pagination = data.get('pagination', {})
+                    has_next = pagination.get('hasNextPage', False)
+                    if has_next and current_page < page + max_pages - 1:
+                        current_page += 1
+                    else:
+                        break
+                else:
+                    break
+            
+            if results:
+                return {
+                    'page': page,
+                    'has_next': has_next,
+                    'actor_id': actor_id,
+                    'works': results
+                }
+        except Exception as e:
+            print(f"JavBus API 获取演员作品失败，将降级为网页解析: {e}")
+
+        # 2. 降级走网页 HTML 解析（原有逻辑）
         results = []
         current_page = page
         has_next = True

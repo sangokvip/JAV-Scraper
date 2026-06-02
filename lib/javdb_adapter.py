@@ -23,10 +23,11 @@ from javdb_api import JavdbAPI
 class JavdbAdapter(BaseAdapter):
     """JAVDB 平台适配器"""
     
-    def __init__(self, existing_tags: List[Dict] = None, domain_index: int = 0):
+    def __init__(self, existing_tags: List[Dict] = None, domain_index: int = 0, proxies: dict = None):
         super().__init__(existing_tags)
         self.platform = Platform.JAVDB
-        self.api = JavdbAPI(domain_index=domain_index)
+        self.proxies = proxies
+        self.api = JavdbAPI(domain_index=domain_index, proxies=proxies)
     
     def get_platform(self) -> Platform:
         """返回平台类型"""
@@ -387,7 +388,7 @@ class JavdbAdapter(BaseAdapter):
             
             for i, img_url in enumerate(thumbnail_images):
                 try:
-                    response = requests.get(img_url, timeout=30)
+                    response = requests.get(img_url, timeout=30, proxies=self.proxies)
                     if response.status_code == 200:
                         ext = img_url.split('.')[-1].split('?')[0] or 'jpg'
                         file_path = video_dir / f"{i:03d}.{ext}"

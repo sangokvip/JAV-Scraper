@@ -25,11 +25,14 @@ class JavbusAdapter(BaseAdapter):
     TYPE_NORMAL = "normal"  # 有码
     TYPE_UNCENSORED = "uncensored"  # 无码
     
-    def __init__(self, existing_tags: List[Dict] = None, proxy: str = None):
+    def __init__(self, existing_tags: List[Dict] = None, proxy: Any = None):
         super().__init__(existing_tags)
         self.platform = Platform.JAVBUS
         self.session = requests.Session()
-        self.proxy = proxy
+        if isinstance(proxy, dict):
+            self.proxy = proxy.get('http') or proxy.get('https')
+        else:
+            self.proxy = proxy
         
         # 设置请求头
         self.session.headers.update({

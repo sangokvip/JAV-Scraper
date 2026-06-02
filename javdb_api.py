@@ -72,15 +72,18 @@ class JavdbAPI:
         >>> print(detail['code'])  # MIDA-583
     """
     
-    def __init__(self, domain_index: int = 0):
+    def __init__(self, domain_index: int = 0, proxies: dict = None):
         """
         初始化 API 客户端
         
         Args:
             domain_index: 域名索引，用于自动切换域名
+            proxies: 代理配置字典，如 {"http": "...", "https": "..."}
         """
         self.domain_index = self.normalize_domain_index(domain_index)
         self.session = requests.Session()
+        if proxies:
+            self.session.proxies = proxies
         self.session.headers.update(config.HEADERS)
         
         self._load_cookies()

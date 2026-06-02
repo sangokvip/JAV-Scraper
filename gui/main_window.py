@@ -8,6 +8,14 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
 
+class TaskTableWidget(QTableWidget):
+    delete_pressed = Signal()
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            self.delete_pressed.emit()
+        else:
+            super().keyPressEvent(event)
+
 class ClickableDropLabel(QLabel):
     clicked = Signal()
     def mousePressEvent(self, event):
@@ -122,7 +130,7 @@ class MainWindow(QMainWindow):
         center_layout.addWidget(self.drop_label)
 
         # 任务表格
-        self.table = QTableWidget(0, 4)
+        self.table = TaskTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["ID", "原文件名", "识别番号 (可双击编辑)", "当前状态"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -142,11 +150,14 @@ class MainWindow(QMainWindow):
         btn_row1_layout = QHBoxLayout()
         self.btn_clear = QPushButton("一键清空")
         self.btn_clear.setObjectName("ClearBtn")
+        self.btn_remove_selected = QPushButton("移除所选")
+        self.btn_remove_selected.setObjectName("RemoveSelectedBtn")
         self.btn_import_dir = QPushButton("导入文件夹...")
         self.btn_import_dir.setObjectName("ImportDirBtn")
         self.btn_add_code = QPushButton("手动输入番号...")
         self.btn_add_code.setObjectName("AddCodeBtn")
         btn_row1_layout.addWidget(self.btn_clear)
+        btn_row1_layout.addWidget(self.btn_remove_selected)
         btn_row1_layout.addWidget(self.btn_import_dir)
         btn_row1_layout.addWidget(self.btn_add_code)
         btn_control_layout.addLayout(btn_row1_layout)
@@ -342,6 +353,15 @@ class MainWindow(QMainWindow):
             }
             #CopyMagnetBtn:hover {
                 background-color: #E5C158;
+            }
+            #RemoveSelectedBtn {
+                background-color: #2E2E2E;
+                border: 1px solid #444444;
+                color: #FF453A;
+            }
+            #RemoveSelectedBtn:hover {
+                background-color: #3E3E3E;
+                border-color: #FF453A;
             }
             #DropZone {
                 border: 2px dashed #444444;

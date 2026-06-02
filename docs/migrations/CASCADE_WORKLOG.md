@@ -232,3 +232,15 @@
 - **风险自查**:
   - 仅是在录入时直接后台跑刮削，不影响底层任何 NFO、整理及 scraper 类，经测试 100% 通过，安全可靠。
 - **回滚点**: `git reset --hard 3bd0b44`
+
+### 23) Feature: 支持手动从任务列表中移除单个文件，并支持键盘 Delete/Backspace 快捷删除
+- **变更文件**: `gui/main_window.py`, `gui/controller.py`
+- **背景与目标**: 提供灵活的任务管理手段，使用户可以通过点击按钮或敲击键盘快捷键将无用、识别错误或多余的视频任务从当前表格列表中移出。
+- **技术实施**:
+  - 自定义 `TaskTableWidget` 类，捕获键盘 `Key_Delete` 和 `Key_Backspace` 信号并抛出 `delete_pressed`。
+  - 主任务表格升级为 `TaskTableWidget`。
+  - 在 `MainWindow` 下方的控制按钮栏中，新增 `self.btn_remove_selected`（“移除所选”按钮），样式设定为精致低调的暗灰色红边框高对比度配置。
+  - 在 `Controller` 中实现 `remove_selected_task`。从主 `self.task_files` 数据字典里删除选中项并移除物理行，对后续任务自动纠正并递减 `row` 索引信息，同时对最左侧 ID 列顺序洗牌更新。若删除的是当前正在预览的任务，则重置预览卡片。
+- **风险自查**:
+  - 行号级联递减与 ID 刷新保证了内存数据与 UI 表格结构的严格一致，pytest 100% 成功，安全稳定。
+- **回滚点**: `git reset --hard 9f9e14d`

@@ -198,6 +198,8 @@ class Controller:
         self.view.table.itemSelectionChanged.connect(self.handle_selection_changed)
         self.view.table.itemChanged.connect(self.handle_cell_changed)
         self.view.btn_save_cookie.clicked.connect(self.save_cookie_config)
+        self.view.btn_remove_selected.clicked.connect(self.remove_selected_task)
+        self.view.table.delete_pressed.connect(self.remove_selected_task)
 
         # 自动加载已有的 Cookie 进行显示
         self.load_cookie_config()
@@ -372,6 +374,42 @@ class Controller:
         self.view.table.setRowCount(0)
         self.task_files.clear()
         self.reset_preview_panel()
+
+    def remove_selected_task(self):
+        selected_ranges = self.view.table.selectedRanges()
+        if not selected_ranges:
+            return
+            
+        row = selected_ranges[0].topRow()
+        
+        # 寻找对应的 filepath 并从 task_files 字典中移除
+        target_fp = None
+        for fp, info in self.task_files.items():
+            if info["row"] == row:
+                target_fp = fp
+                break
+                
+        if target_fp:
+            # 1. 从数据字典中删除
+            del self.task_files[target_fp]
+            
+            # 2. 从 QTableWidget 中移除该行
+            self.view.table.removeRow(row)
+            
+            # 3. 更新剩余所有任务的 row 索引
+            for fp, info in self.task_files.items():
+                if info["row"] > row:
+                    info["row"] -= 1
+                    
+            # 4. 更新 ID 列，使其连续
+            for r in range(self.view.table.rowCount()):
+                id_item = self.view.table.item(r, 0)
+                if id_item:
+                    id_item.setText(f"{r + 1:02d}")
+                    
+            # 5. 如果删除了当前选中的预览任务，重置右侧预览
+            if self.current_preview_filepath == target_fp:
+                self.reset_preview_panel()
 
     def reset_preview_panel(self):
         self.view.lbl_cover.setText("选择影片以预览海报")

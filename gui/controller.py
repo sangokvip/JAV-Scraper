@@ -215,6 +215,7 @@ class Controller:
             elif os.path.isfile(path) and path.lower().endswith(valid_extensions):
                 all_files.append(path)
 
+        added_files = []
         for file_path in all_files:
             if file_path in self.task_files:
                 continue  # 避免重复添加
@@ -239,7 +240,7 @@ class Controller:
             self.view.table.setItem(row, 2, code_item)
 
             # 当前状态
-            status_text = "排队中" if code else "番号待补充"
+            status_text = "正在刮削..." if code else "番号待补充"
             status_item = QTableWidgetItem(status_text)
             status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.view.table.setItem(row, 3, status_item)
@@ -250,6 +251,31 @@ class Controller:
                 "detail": None,
                 "status": status_text
             }
+            if code:
+                added_files.append(file_path)
+
+        # 如果有新加入并且包含识别番号的文件，自动触发多线程刮削，并选中第一个以显示进度
+        if added_files:
+            # 自动选中第一个新加任务，右侧激活联动预览
+            first_info = self.task_files[added_files[0]]
+            self.view.table.selectRow(first_info["row"])
+
+            output_dir = self.view.path_input.text().strip()
+            if output_dir:
+                proxies = None
+                if self.view.chk_custom_proxy.isChecked():
+                    proxy = self.view.proxy_input.text().strip()
+                    proxies = {"http": proxy, "https": proxy} if proxy else None
+                platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
+
+                for fp in added_files:
+                    worker = ScrapeWorker(fp, self.task_files[fp]["code"], output_dir, platform, proxies, only_scrape=True)
+                    worker.signals.started.connect(self.on_worker_started)
+                    worker.signals.progress.connect(self.on_worker_progress)
+                    worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
+                    worker.signals.finished.connect(self.on_worker_finished)
+
+                    self.thread_pool.start(worker)
 
     def import_files_manually(self):
         video_filters = "视频文件 (*.mp4 *.mkv *.avi *.wmv *.mov *.flv *.rmvb)"

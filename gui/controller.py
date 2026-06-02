@@ -25,27 +25,123 @@ class SortableTableWidgetItem(QTableWidgetItem):
         return super().__lt__(other)
 
 class PhotoDialog(QDialog):
-    def __init__(self, pixmap, parent=None):
+    def __init__(self, pixmaps, current_index, parent=None):
         super().__init__(parent)
+        self.pixmaps = pixmaps
+        self.current_index = current_index
         self.setWindowTitle("剧照放大预览")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        lbl = QLabel()
-        # 放大为最大 800x600
-        scaled_pixmap = pixmap.scaled(800, 600, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-        lbl.setPixmap(scaled_pixmap)
-        layout.addWidget(lbl)
-        self.setLayout(layout)
         
-        # 显式给 dialog 设置跟图片一样的物理高宽，防止在 macOS 或是某些 Linux 桌面下发生折叠折拢 Bug
-        self.setFixedSize(scaled_pixmap.width(), scaled_pixmap.height())
+        # 窗口物理尺寸固定，大图横竖切换时窗口不跳动，视觉更平滑稳定
+        self.setFixedSize(920, 650)
+        
+        # 主布局
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(5)
+        
+        # 中间大图容器：[左按钮] [大图显示] [右按钮]
+        middle_layout = QHBoxLayout()
+        middle_layout.setContentsMargins(0, 0, 0, 0)
+        middle_layout.setSpacing(15)
+        
+        self.btn_prev = QPushButton("◀")
+        self.btn_prev.setObjectName("PrevPhotoBtn")
+        self.btn_prev.clicked.connect(self.show_prev)
+        
+        self.lbl_image = QLabel()
+        self.lbl_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_image.setFixedSize(800, 600)
+        
+        self.btn_next = QPushButton("▶")
+        self.btn_next.setObjectName("NextPhotoBtn")
+        self.btn_next.clicked.connect(self.show_next)
+        
+        middle_layout.addWidget(self.btn_prev)
+        middle_layout.addWidget(self.lbl_image)
+        middle_layout.addWidget(self.btn_next)
+        main_layout.addLayout(middle_layout)
+        
+        # 底部页码
+        self.lbl_info = QLabel()
+        self.lbl_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_info.setStyleSheet("color: #D4AF37; font-weight: bold; font-size: 12px; margin-top: 2px;")
+        main_layout.addWidget(self.lbl_info)
+        
+        # 渲染当前图片
+        self.update_view()
+        
+        # 样式美化（只作用于看图窗口内，不污染外部）
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #121212;
+            }
+            QPushButton#PrevPhotoBtn, QPushButton#NextPhotoBtn {
+                background-color: rgba(46, 46, 46, 0.6);
+                border: 1px solid #444444;
+                border-radius: 20px;
+                min-width: 40px;
+                min-height: 40px;
+                max-width: 40px;
+                max-height: 40px;
+                font-size: 16px;
+                color: #F5F5F7;
+                font-weight: bold;
+            }
+            QPushButton#PrevPhotoBtn:hover, QPushButton#NextPhotoBtn:hover {
+                background-color: rgba(212, 175, 55, 0.8);
+                border-color: #D4AF37;
+                color: #121212;
+            }
+            QPushButton#PrevPhotoBtn:disabled, QPushButton#NextPhotoBtn:disabled {
+                background-color: rgba(30, 30, 30, 0.3);
+                border-color: #2C2C2C;
+                color: #555555;
+            }
+        """)
+
+    def update_view(self):
+        if not self.pixmaps or self.current_index < 0 or self.current_index >= len(self.pixmaps):
+            return
+            
+        pixmap = self.pixmaps[self.current_index]
+        scaled = pixmap.scaled(800, 600, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        self.lbl_image.setPixmap(scaled)
+        
+        # 页码指示
+        self.lbl_info.setText(f"剧照预览：{self.current_index + 1} / {len(self.pixmaps)}")
+        
+        # 按钮置灰状态设置
+        self.btn_prev.setEnabled(self.current_index > 0)
+        self.btn_next.setEnabled(self.current_index < len(self.pixmaps) - 1)
+
+    def show_prev(self):
+        if self.current_index > 0:
+            self.current_index -= 1
+            self.update_view()
+
+    def show_next(self):
+        if self.current_index < len(self.pixmaps) - 1:
+            self.current_index += 1
+            self.update_view()
+
+    def keyPressEvent(self, event):
+        # 键盘左右键切换
+        if event.key() == Qt.Key.Key_Left:
+            self.show_prev()
+        elif event.key() == Qt.Key.Key_Right:
+            self.show_next()
+        else:
+            super().keyPressEvent(event)
 
     def mousePressEvent(self, event):
-        # 用户点击预览大图的任意地方，直接关闭大图
-        self.accept()
+        # 点击中间大图区域则自动关闭弹窗
+        if event.button() == Qt.MouseButton.LeftButton:
+            pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
+            if self.lbl_image.geometry().contains(pos):
+                self.accept()
 
 class ClickableLabel(QLabel):
-    clicked = Signal(QPixmap)
+    clicked = Signal(QLabel)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.pixmap_data = None
@@ -53,7 +149,7 @@ class ClickableLabel(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             if self.pixmap_data:
-                self.clicked.emit(self.pixmap_data)
+                self.clicked.emit(self)
 
 class ImageLoadSignals(QObject):
     loaded = Signal(str, str, bytes)  # filepath, url, content
@@ -729,9 +825,20 @@ class Controller:
                 lbl.clicked.connect(self.show_zoomed_image)
                 self.view.samples_layout.addWidget(lbl)
 
-    def show_zoomed_image(self, pixmap):
-        dialog = PhotoDialog(pixmap, self.view)
-        dialog.exec()
+    def show_zoomed_image(self, clicked_label):
+        pixmaps = []
+        current_index = 0
+        if hasattr(self.view, "samples_layout"):
+            for i in range(self.view.samples_layout.count()):
+                widget = self.view.samples_layout.itemAt(i).widget()
+                if isinstance(widget, ClickableLabel) and widget.pixmap_data:
+                    pixmaps.append(widget.pixmap_data)
+                    if widget == clicked_label:
+                        current_index = len(pixmaps) - 1
+
+        if pixmaps:
+            dialog = PhotoDialog(pixmaps, current_index, self.view)
+            dialog.exec()
 
     def copy_to_clipboard(self, text):
         if text:

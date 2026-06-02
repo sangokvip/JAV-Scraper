@@ -188,3 +188,16 @@
 - **风险自查**:
   - 仅涉及预览弹窗的窗口配置及事件捕获，不影响任何业务模型与主数据流，安全可靠。
 - **回滚点**: `git reset --hard eedf4f8`
+
+### 19) Feature: 预览大图弹窗支持左右切换按钮、页码指示及键盘左右方向键切换
+- **变更文件**: `gui/controller.py`
+- **背景与目标**: 满足用户在剧照放大弹窗中通过左右按键及键盘方向键快捷选择并轮播查看下一张或上一张剧照的需求。
+- **技术实施**:
+  - 重构 `ClickableLabel` 的点击信号，改为传出自身 `QLabel` 引用。
+  - 在 `Controller.show_zoomed_image` 中，通过扫描 `samples_layout` 容器下所有的剧照控件，提取全部无损图片对象并精确确定当前选中的剧照索引值 `current_index`。
+  - 重构 `PhotoDialog` 接收当前的剧照 `pixmaps` 列表，使用 `QHBoxLayout` 在图片左右两侧插入半透明金色高亮悬浮感的 “◀” 和 “▶” 圆角切图按钮，在底部增加“剧照预览：X / Y”的金黄色页码文字。
+  - 重载 `PhotoDialog.keyPressEvent`，捕获并处理 `Key_Left` 和 `Key_Right` 事件，实现键盘物理按键切换。
+  - 优化大图点击关闭的触发逻辑，精确限定只在用户点击正中央 `lbl_image` 时才关闭弹窗，规避按钮和周边空白处的误触。
+- **风险自查**:
+  - 完全重构了弹窗内的内部逻辑，经 pytest 运行 100% 成功，没有破坏任何核心 scraper API 业务流，无 breaking changes。
+- **回滚点**: `git reset --hard aabced6`

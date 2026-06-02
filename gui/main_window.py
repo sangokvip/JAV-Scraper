@@ -211,16 +211,19 @@ class MainWindow(QMainWindow):
         self.lbl_magnet_title.setObjectName("MagnetTitle")
         right_layout.addWidget(self.lbl_magnet_title)
 
-        self.table_magnet = QTableWidget(0, 2)
-        self.table_magnet.setHorizontalHeaderLabels(["大小", "操作"])
+        self.table_magnet = QTableWidget(0, 3)
+        self.table_magnet.setHorizontalHeaderLabels(["大小", "日期", "操作"])
         self.table_magnet.setObjectName("MagnetTable")
         self.table_magnet.setFixedHeight(120)
         self.table_magnet.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.table_magnet.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-        self.table_magnet.setColumnWidth(1, 70)
+        self.table_magnet.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+        self.table_magnet.setColumnWidth(1, 95)
+        self.table_magnet.setColumnWidth(2, 60)
         self.table_magnet.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table_magnet.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table_magnet.verticalHeader().setVisible(False)
+        self.table_magnet.horizontalHeader().setSectionsClickable(True)
         right_layout.addWidget(self.table_magnet)
 
         right_layout.addStretch()
@@ -398,6 +401,13 @@ class MainWindow(QMainWindow):
             QMessageBox QPushButton:hover, QInputDialog QPushButton:hover {
                 background-color: #3E3E3E;
                 border-color: #D4AF37;
+            }
+            QTableWidget QLineEdit {
+                padding: 0px;
+                border: 1px solid #D4AF37;
+                border-radius: 0px;
+                background-color: #2A2A2A;
+                color: #F5F5F7;
             }
         """)
 

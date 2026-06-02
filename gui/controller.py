@@ -8,6 +8,22 @@ from gui.main_window import MainWindow
 from gui.scrape_worker import ScrapeWorker
 from lib.code_extractor import extract_code
 
+class SortableTableWidgetItem(QTableWidgetItem):
+    def __init__(self, text, sort_value):
+        super().__init__(text)
+        self.sort_value = sort_value
+
+    def __lt__(self, other):
+        if isinstance(other, SortableTableWidgetItem):
+            v1 = self.sort_value
+            v2 = other.sort_value
+            if v1 is None:
+                return True
+            if v2 is None:
+                return False
+            return v1 < v2
+        return super().__lt__(other)
+
 class PhotoDialog(QDialog):
     def __init__(self, pixmap, parent=None):
         super().__init__(parent)
@@ -17,9 +33,13 @@ class PhotoDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         lbl = QLabel()
         # 放大为最大 800x600
-        lbl.setPixmap(pixmap.scaled(800, 600, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        scaled_pixmap = pixmap.scaled(800, 600, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        lbl.setPixmap(scaled_pixmap)
         layout.addWidget(lbl)
         self.setLayout(layout)
+        
+        # 显式给 dialog 设置跟图片一样的物理高宽，防止在 macOS 或是某些 Linux 桌面下发生折叠折拢 Bug
+        self.setFixedSize(scaled_pixmap.width(), scaled_pixmap.height())
 
 class ClickableLabel(QLabel):
     clicked = Signal(QPixmap)
@@ -172,7 +192,7 @@ class Controller:
             self.view.table.setItem(row, 2, code_item)
             
             # 当前状态
-            status_item = QTableWidgetItem("排队中")
+            status_item = QTableWidgetItem("正在刮削...")
             status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.view.table.setItem(row, 3, status_item)
             
@@ -180,8 +200,28 @@ class Controller:
                 "code": code,
                 "row": row,
                 "detail": None,
-                "status": "排队中"
+                "status": "正在刮削..."
             }
+
+            # 自动选中刚添加的任务行，激活右侧面板预览
+            self.view.table.selectRow(row)
+
+            # 自动开始刮削，免除二次点击
+            output_dir = self.view.path_input.text().strip()
+            if output_dir:
+                proxies = None
+                if self.view.chk_custom_proxy.isChecked():
+                    proxy = self.view.proxy_input.text().strip()
+                    proxies = {"http": proxy, "https": proxy} if proxy else None
+                platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
+
+                worker = ScrapeWorker(virtual_path, code, output_dir, platform, proxies, only_scrape=True)
+                worker.signals.started.connect(self.on_worker_started)
+                worker.signals.progress.connect(self.on_worker_progress)
+                worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
+                worker.signals.finished.connect(self.on_worker_finished)
+
+                self.thread_pool.start(worker)
 
     def handle_cell_changed(self, item):
         # 当用户在表格中双击编辑修改番号时触发
@@ -222,6 +262,26 @@ class Controller:
                 widget = item.widget()
                 if widget:
                     widget.deleteLater()
+
+    def _parse_size_mb(self, size_str):
+        if not size_str:
+            return 0.0
+        import re
+        s = size_str.upper().strip()
+        match = re.match(r'^([\d\.]+)\s*(GB|MB|KB|B|G|M|K)?', s)
+        if not match:
+            return 0.0
+        num = float(match.group(1))
+        unit = match.group(2)
+        if unit in ('GB', 'G'):
+            return num * 1024.0
+        elif unit in ('MB', 'M'):
+            return num
+        elif unit in ('KB', 'K'):
+            return num / 1024.0
+        elif unit == 'B':
+            return num / (1024.0 * 1024.0)
+        return num
 
     def test_proxy_connection(self):
         proxy = self.view.proxy_input.text().strip()
@@ -510,24 +570,60 @@ class Controller:
         self.view.lbl_info_details.setText(info_details_text)
 
         # 渲染磁力链接表格
+        self.view.table_magnet.setSortingEnabled(False)
         self.view.table_magnet.setRowCount(0)
+        
         magnets = detail.get("magnets", [])
+        import re
         for mag in magnets:
             row = self.view.table_magnet.rowCount()
             self.view.table_magnet.insertRow(row)
 
-            size_str = mag.get("size_text") or (f"{mag.get('size_mb', 0):.2f}MB" if mag.get('size_mb') else "未知大小")
-            size_item = QTableWidgetItem(size_str)
+            # 获取磁力链接
+            magnet_link = mag.get("magnet") or mag.get("link") or ""
+
+            # 判断是 JAVDB 还是 JAVBUS
+            if "magnet" in mag:  # JAVDB
+                size_text = mag.get("size_text") or "未知大小"
+                date_match = re.search(r'\d{4}-\d{2}-\d{2}', size_text)
+                if date_match:
+                    date_str = date_match.group(0)
+                    size_str = size_text.replace(date_str, "").strip(", ")
+                else:
+                    date_str = "-"
+                    size_str = size_text
+                size_mb = mag.get("size_mb") or self._parse_size_mb(size_str)
+            else:  # JAVBUS
+                size_str = mag.get("size") or "未知大小"
+                date_str = mag.get("share_date") or "-"
+                size_mb = self._parse_size_mb(size_str)
+
+            # 大小列
+            size_item = SortableTableWidgetItem(size_str, size_mb)
             size_item.setFlags(size_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             size_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.view.table_magnet.setItem(row, 0, size_item)
 
-            # 复制操作按钮
+            # 日期列
+            date_item = SortableTableWidgetItem(date_str, date_str)
+            date_item.setFlags(date_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            date_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.view.table_magnet.setItem(row, 1, date_item)
+
+            # 复制操作按钮 (第2列)
             btn_copy = QPushButton("复制")
             btn_copy.setObjectName("CopyMagnetBtn")
-            magnet_link = mag.get("magnet", "")
             btn_copy.clicked.connect(lambda checked=False, link=magnet_link: self.copy_to_clipboard(link))
-            self.view.table_magnet.setCellWidget(row, 1, btn_copy)
+            self.view.table_magnet.setCellWidget(row, 2, btn_copy)
+
+            # 按钮列需要占位，以防排序导致单元格状态混乱
+            dummy_item = SortableTableWidgetItem("", "")
+            dummy_item.setFlags(dummy_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.view.table_magnet.setItem(row, 2, dummy_item)
+
+        # 默认按大小列(第0列)降序排列
+        self.view.table_magnet.sortByColumn(0, Qt.SortOrder.DescendingOrder)
+        self.view.table_magnet.setSortingEnabled(True)
 
         # 渲染海报图片
         poster_loaded = False

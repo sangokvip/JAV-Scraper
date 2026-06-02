@@ -22,14 +22,15 @@ class PhotoDialog(QDialog):
         self.setLayout(layout)
 
 class ClickableLabel(QLabel):
-    double_clicked = Signal(QPixmap)
+    clicked = Signal(QPixmap)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.pixmap_data = None
 
-    def mouseDoubleClickEvent(self, event):
-        if self.pixmap_data:
-            self.double_clicked.emit(self.pixmap_data)
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.pixmap_data:
+                self.clicked.emit(self.pixmap_data)
 
 class ImageLoadSignals(QObject):
     loaded = Signal(str, str, bytes)  # filepath, url, content
@@ -212,7 +213,7 @@ class Controller:
         self.view.lbl_cover.setPixmap(QPixmap())
         self.view.lbl_info_title.setText("影片番号与标题")
         self.view.lbl_info_details.setText("制片商: -\n发行日期: -\n演员: -")
-        self.view.txt_magnet.setText("")
+        self.view.table_magnet.setRowCount(0)
         
         # 清空剧照 samples_layout
         if hasattr(self.view, "samples_layout"):
@@ -299,8 +300,10 @@ class Controller:
             QMessageBox.warning(self.view, "警告", "请先选择目标保存路径！")
             return
 
-        proxy = self.view.proxy_input.text().strip()
-        proxies = {"http": proxy, "https": proxy} if proxy else None
+        proxies = None
+        if self.view.chk_custom_proxy.isChecked():
+            proxy = self.view.proxy_input.text().strip()
+            proxies = {"http": proxy, "https": proxy} if proxy else None
         platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
 
         active_tasks = 0
@@ -332,8 +335,10 @@ class Controller:
             QMessageBox.warning(self.view, "警告", "请先选择目标保存路径！")
             return
 
-        proxy = self.view.proxy_input.text().strip()
-        proxies = {"http": proxy, "https": proxy} if proxy else None
+        proxies = None
+        if self.view.chk_custom_proxy.isChecked():
+            proxy = self.view.proxy_input.text().strip()
+            proxies = {"http": proxy, "https": proxy} if proxy else None
         platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
 
         active_tasks = 0
@@ -458,16 +463,25 @@ class Controller:
         )
         self.view.lbl_info_details.setText(info_details_text)
 
-        # 渲染磁力链接
+        # 渲染磁力链接表格
+        self.view.table_magnet.setRowCount(0)
         magnets = detail.get("magnets", [])
-        if magnets:
-            magnet_lines = []
-            for mag in magnets:
-                size_str = mag.get("size_text") or (f"{mag.get('size_mb', 0):.2f}MB" if mag.get('size_mb') else "未知大小")
-                magnet_lines.append(f"[{size_str}] {mag.get('magnet', '')}")
-            self.view.txt_magnet.setText("\n".join(magnet_lines))
-        else:
-            self.view.txt_magnet.setText("未获取到磁力链接")
+        for mag in magnets:
+            row = self.view.table_magnet.rowCount()
+            self.view.table_magnet.insertRow(row)
+
+            size_str = mag.get("size_text") or (f"{mag.get('size_mb', 0):.2f}MB" if mag.get('size_mb') else "未知大小")
+            size_item = QTableWidgetItem(size_str)
+            size_item.setFlags(size_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            size_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.view.table_magnet.setItem(row, 0, size_item)
+
+            # 复制操作按钮
+            btn_copy = QPushButton("复制")
+            btn_copy.setObjectName("CopyMagnetBtn")
+            magnet_link = mag.get("magnet", "")
+            btn_copy.clicked.connect(lambda checked=False, link=magnet_link: self.copy_to_clipboard(link))
+            self.view.table_magnet.setCellWidget(row, 1, btn_copy)
 
         # 渲染海报图片
         poster_loaded = False
@@ -537,7 +551,7 @@ class Controller:
                             scaled_pix = pix.scaledToHeight(90, Qt.TransformationMode.SmoothTransformation)
                             lbl.setPixmap(scaled_pix)
                             lbl.pixmap_data = pix
-                            lbl.double_clicked.connect(self.show_zoomed_image)
+                            lbl.clicked.connect(self.show_zoomed_image)
                             self.view.samples_layout.addWidget(lbl)
         else:
             # 网络异步加载剧照
@@ -563,9 +577,16 @@ class Controller:
                 scaled_pix = pix.scaledToHeight(90, Qt.TransformationMode.SmoothTransformation)
                 lbl.setPixmap(scaled_pix)
                 lbl.pixmap_data = pix
-                lbl.double_clicked.connect(self.show_zoomed_image)
+                lbl.clicked.connect(self.show_zoomed_image)
                 self.view.samples_layout.addWidget(lbl)
 
     def show_zoomed_image(self, pixmap):
         dialog = PhotoDialog(pixmap, self.view)
         dialog.exec()
+
+    def copy_to_clipboard(self, text):
+        if text:
+            from PySide6.QtGui import QGuiApplication
+            clipboard = QGuiApplication.clipboard()
+            clipboard.setText(text)
+            QMessageBox.information(self.view, "提示", "磁力链接已成功复制到剪贴板！")

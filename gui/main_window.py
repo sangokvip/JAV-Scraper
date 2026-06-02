@@ -2,7 +2,8 @@ import os
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QTableWidget,
     QTableWidgetItem, QPushButton, QLabel, QLineEdit, QTextEdit,
-    QFileDialog, QAbstractItemView, QHeaderView, QRadioButton, QButtonGroup
+    QFileDialog, QAbstractItemView, QHeaderView, QRadioButton, QButtonGroup,
+    QCheckBox
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
@@ -48,15 +49,37 @@ class MainWindow(QMainWindow):
 
         # 代理设置
         left_layout.addWidget(QLabel("代理设置 (SOCKS5/HTTP):"))
-        self.proxy_input = QLineEdit("http://127.0.0.1:7890")
-        self.proxy_input.setPlaceholderText("例如 http://127.0.0.1:7890")
+        self.chk_custom_proxy = QCheckBox("启用自定义代理")
+        self.chk_custom_proxy.setObjectName("CustomProxyCheck")
+        self.chk_custom_proxy.setChecked(False)
+        left_layout.addWidget(self.chk_custom_proxy)
+
+        self.proxy_input = QLineEdit("http://127.0.0.1:10808")
+        self.proxy_input.setPlaceholderText("例如 http://127.0.0.1:10808")
+        self.proxy_input.setEnabled(False)
         left_layout.addWidget(self.proxy_input)
 
         self.btn_test_proxy = QPushButton("测试代理连接")
+        self.btn_test_proxy.setEnabled(False)
         left_layout.addWidget(self.btn_test_proxy)
-        self.lbl_proxy_status = QLabel("代理状态: 未测试")
+
+        # 信号联动绑定
+        self.chk_custom_proxy.toggled.connect(self.proxy_input.setEnabled)
+        self.chk_custom_proxy.toggled.connect(self.btn_test_proxy.setEnabled)
+
+        self.lbl_proxy_status = QLabel("代理状态: 系统代理模式")
         self.lbl_proxy_status.setObjectName("ProxyStatusLabel")
         left_layout.addWidget(self.lbl_proxy_status)
+
+        # 联动更新提示状态和颜色
+        def update_proxy_status_label(checked):
+            if checked:
+                self.lbl_proxy_status.setText("代理状态: 未测试")
+                self.lbl_proxy_status.setStyleSheet("color: #8E8E93;")
+            else:
+                self.lbl_proxy_status.setText("代理状态: 系统代理模式")
+                self.lbl_proxy_status.setStyleSheet("color: #D4AF37;")
+        self.chk_custom_proxy.toggled.connect(update_proxy_status_label)
 
         # Cookie 导入
         left_layout.addWidget(QLabel("JAVDB Cookie (可选):"))
@@ -162,7 +185,7 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(self.lbl_info_details)
 
         # 剧照横向滚动区域
-        self.lbl_samples_title = QLabel("影片预览剧照 (双击放大):")
+        self.lbl_samples_title = QLabel("影片预览剧照 (点击放大):")
         self.lbl_samples_title.setObjectName("SamplesTitle")
         right_layout.addWidget(self.lbl_samples_title)
 
@@ -183,15 +206,21 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(self.samples_scroll)
 
         # 磁力链接展示区域
-        self.lbl_magnet_title = QLabel("磁力链接 (可直接复制):")
+        self.lbl_magnet_title = QLabel("磁力链接 (点击复制):")
         self.lbl_magnet_title.setObjectName("MagnetTitle")
         right_layout.addWidget(self.lbl_magnet_title)
 
-        self.txt_magnet = QTextEdit()
-        self.txt_magnet.setObjectName("MagnetText")
-        self.txt_magnet.setReadOnly(True)
-        self.txt_magnet.setFixedHeight(80)
-        right_layout.addWidget(self.txt_magnet)
+        self.table_magnet = QTableWidget(0, 2)
+        self.table_magnet.setHorizontalHeaderLabels(["大小", "操作"])
+        self.table_magnet.setObjectName("MagnetTable")
+        self.table_magnet.setFixedHeight(120)
+        self.table_magnet.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.table_magnet.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        self.table_magnet.setColumnWidth(1, 70)
+        self.table_magnet.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table_magnet.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table_magnet.verticalHeader().setVisible(False)
+        right_layout.addWidget(self.table_magnet)
 
         right_layout.addStretch()
         main_layout.addWidget(right_panel)
@@ -275,18 +304,36 @@ class MainWindow(QMainWindow):
                 font-size: 12px;
                 margin-top: 5px;
             }
+            #CustomProxyCheck {
+                color: #F5F5F7;
+                font-weight: bold;
+            }
             #MagnetTitle {
                 color: #D4AF37;
                 font-size: 12px;
                 margin-top: 5px;
             }
-            #MagnetText {
+            #MagnetTable {
                 background-color: #2A2A2A;
                 border: 1px solid #3A3A3A;
                 border-radius: 6px;
-                color: #8E8E93;
-                font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+                gridline-color: #3A3A3A;
+            }
+            #MagnetTable::item {
+                color: #F5F5F7;
+                padding: 4px;
+            }
+            #CopyMagnetBtn {
+                background-color: #D4AF37;
+                color: #121212;
+                border: none;
+                border-radius: 3px;
+                padding: 3px 6px;
                 font-size: 11px;
+                font-weight: bold;
+            }
+            #CopyMagnetBtn:hover {
+                background-color: #E5C158;
             }
             #DropZone {
                 border: 2px dashed #444444;

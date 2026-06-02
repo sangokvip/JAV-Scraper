@@ -244,3 +244,14 @@
 - **风险自查**:
   - 行号级联递减与 ID 刷新保证了内存数据与 UI 表格结构的严格一致，pytest 100% 成功，安全稳定。
 - **回滚点**: `git reset --hard 9f9e14d`
+
+### 24) Perf: 优化多文件刮削速度，通过分离 QThreadPool 及引入 ThreadPoolExecutor 实现剧照高并发下载
+- **变更文件**: `gui/controller.py`, `gui/scrape_worker.py`
+- **背景与目标**: 彻底解决当导入大量视频文件时刮削速度极慢，以及图片加载与刮削任务相互抢占全局线程池通道导致右侧看板图片卡死显示不出来的严重体验问题。
+- **技术实施**:
+  - **解耦主子线程池**：在 `gui/controller.py` 中实例化专用的 `self.scrape_pool = QThreadPool()` 并限定最大并发数为 3 执行刮削任务（防止被平台风控 403）；原有的全局线程池则解放出来，专门服务于右侧预览网络图片加载的 `ImageLoadWorker`，彻底打通通道，实现双池并发互不干扰。
+  - **并发下载剧照**：在 `gui/scrape_worker.py` 中，将海报和预览图请求的串行方式重构为 Python 级别的 `concurrent.futures.ThreadPoolExecutor(max_workers=8)`，实现 8 线程并发下载。
+  - **微调超时机制**：将封面大图请求的 `timeout` 从 30s 缩减至 10s，单张预览图 `timeout` 从 30s 缩减至 8s。防止丢包或失效死图阻塞整片刮削进度。
+- **风险自查**:
+  - 核心业务流程未改动，仅修改网络底层的多线程调度机制。经 pytest 100% 运行通过，无任何异常。
+- **回滚点**: `git reset --hard f203838`

@@ -104,27 +104,40 @@ class ScrapeWorker(QRunnable):
             self.signals.progress.emit(self.file_path, "正在下载封面大图...")
             cover_url = detail.get("cover_url")
             if cover_url:
-                r = requests.get(cover_url, timeout=30, proxies=self.proxies)
+                r = requests.get(cover_url, timeout=10, proxies=self.proxies)
                 if r.status_code == 200:
                     with open(os.path.join(target_folder, "poster.jpg"), "wb") as f:
                         f.write(r.content)
 
-            # 6. 下载样品预览图并存放至 extrafanart/
+            # 6. 并发下载样品预览图并存放至 extrafanart/
             thumbnails = detail.get("thumbnail_images", [])
             if thumbnails:
                 self.signals.progress.emit(self.file_path, f"正在下载预览图 (0/{len(thumbnails)})...")
                 extrafanart_dir = os.path.join(target_folder, "extrafanart")
                 os.makedirs(extrafanart_dir, exist_ok=True)
-                for idx, img_url in enumerate(thumbnails):
+                
+                import concurrent.futures
+
+                def download_image(args):
+                    idx, img_url = args
                     try:
-                        r = requests.get(img_url, timeout=30, proxies=self.proxies)
+                        # 单张剧照超时时间从 30s 减少到 8s，防止由于单张失效死图阻塞全局
+                        r = requests.get(img_url, timeout=8, proxies=self.proxies)
                         if r.status_code == 200:
                             img_path = os.path.join(extrafanart_dir, f"fanart{idx+1}.jpg")
                             with open(img_path, "wb") as f:
                                 f.write(r.content)
+                            return True
                     except Exception as img_err:
                         print(f"下载剧照失败 {img_url}: {img_err}")
-                    self.signals.progress.emit(self.file_path, f"正在下载预览图 ({idx+1}/{len(thumbnails)})...")
+                    return False
+
+                completed = 0
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                    tasks = {executor.submit(download_image, (idx, img_url)): idx for idx, img_url in enumerate(thumbnails)}
+                    for future in concurrent.futures.as_completed(tasks):
+                        completed += 1
+                        self.signals.progress.emit(self.file_path, f"正在下载预览图 ({completed}/{len(thumbnails)})...")
 
             self.signals.finished.emit(self.file_path, "success")
 

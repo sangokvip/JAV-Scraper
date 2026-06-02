@@ -174,8 +174,10 @@ class Controller:
     def __init__(self, view: MainWindow):
         self.view = view
         self.thread_pool = QThreadPool.globalInstance()
-        # 限制并发为 2，防止被平台封锁 IP
-        self.thread_pool.setMaxThreadCount(2)
+        
+        # 专用的刮削线程池，限制并发为 3，防止被平台封锁 IP
+        self.scrape_pool = QThreadPool()
+        self.scrape_pool.setMaxThreadCount(3)
         
         # 存储所有正在排队或执行的任务文件：{file_path: {"code": str, "row": int, "detail": dict, "status": str}}
         self.task_files = {}
@@ -277,7 +279,7 @@ class Controller:
                     worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
                     worker.signals.finished.connect(self.on_worker_finished)
 
-                    self.thread_pool.start(worker)
+                    self.scrape_pool.start(worker)
 
     def import_files_manually(self):
         video_filters = "视频文件 (*.mp4 *.mkv *.avi *.wmv *.mov *.flv *.rmvb)"
@@ -348,7 +350,7 @@ class Controller:
                 worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
                 worker.signals.finished.connect(self.on_worker_finished)
 
-                self.thread_pool.start(worker)
+                self.scrape_pool.start(worker)
 
     def handle_cell_changed(self, item):
         # 当用户在表格中双击编辑修改番号时触发
@@ -573,7 +575,7 @@ class Controller:
             worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
             worker.signals.finished.connect(self.on_worker_finished)
 
-            self.thread_pool.start(worker)
+            self.scrape_pool.start(worker)
 
     def start_organizing(self):
         output_dir = self.view.path_input.text().strip()
@@ -631,7 +633,7 @@ class Controller:
             worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
             worker.signals.finished.connect(self.on_worker_finished)
 
-            self.thread_pool.start(worker)
+            self.scrape_pool.start(worker)
 
     # ================== 后台线程信号槽 ==================
     def on_worker_started(self, filepath):

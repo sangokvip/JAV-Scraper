@@ -178,3 +178,13 @@
 - **风险自查**:
   - 所有改动完全基于 GUI 视图交互层与样式层，经 pytest 运行 100% 成功，未对底层爬虫元数据提取造成 breaking changes。
 - **回滚点**: `git reset --hard 2a9e3bc`
+
+### 18) Fix: 恢复剧照弹窗标题栏与关闭红绿灯按钮，并支持点击大图任意处即时关闭
+- **变更文件**: `gui/controller.py`
+- **背景与目标**: 修复大图放大弹窗遮挡主窗口且没有关闭按钮导致无法关闭的问题，并赋予其更快捷舒适的交互操作。
+- **技术实施**:
+  - 移除了 `PhotoDialog` 中的 `self.setWindowFlags(Qt.WindowType.WindowCloseButtonHint)` 语句，恢复 macOS 系统自带的窗口修饰标题栏及红绿灯关闭按钮。
+  - 在 `PhotoDialog` 类中重载了 `mousePressEvent` 事件，调用 `self.accept()`，使用户只需在图片的任意位置轻点鼠标即可瞬间退出预览，极大地方便了使用。
+- **风险自查**:
+  - 仅涉及预览弹窗的窗口配置及事件捕获，不影响任何业务模型与主数据流，安全可靠。
+- **回滚点**: `git reset --hard eedf4f8`

@@ -28,7 +28,6 @@ class PhotoDialog(QDialog):
     def __init__(self, pixmap, parent=None):
         super().__init__(parent)
         self.setWindowTitle("剧照放大预览")
-        self.setWindowFlags(Qt.WindowType.WindowCloseButtonHint)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         lbl = QLabel()
@@ -40,6 +39,10 @@ class PhotoDialog(QDialog):
         
         # 显式给 dialog 设置跟图片一样的物理高宽，防止在 macOS 或是某些 Linux 桌面下发生折叠折拢 Bug
         self.setFixedSize(scaled_pixmap.width(), scaled_pixmap.height())
+
+    def mousePressEvent(self, event):
+        # 用户点击预览大图的任意地方，直接关闭大图
+        self.accept()
 
 class ClickableLabel(QLabel):
     clicked = Signal(QPixmap)

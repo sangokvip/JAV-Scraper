@@ -112,6 +112,22 @@ class MainWindow(QMainWindow):
         self.btn_browse = QPushButton("浏览并选择路径...")
         left_layout.addWidget(self.btn_browse)
 
+        # 所有权展示与免责声明
+        self.lbl_copyright = QLabel(
+            "<div style='text-align: center; margin-top: 15px; border-top: 1px solid #2C2C2C; padding-top: 12px;'>"
+            "  <div style='color: #8E8E93; font-size: 11px; margin-bottom: 4px;'><b>所有权归属</b></div>"
+            "  <div style='color: #D4AF37; font-size: 11px; font-weight: bold; margin-bottom: 6px;'>"
+            "    <a href='https://github.com/sangokvip/JAV-Scraper' style='color: #D4AF37; text-decoration: none;'>GitHub: JAV-Scraper</a>"
+            "  </div>"
+            "  <div style='color: #8E8E93; font-size: 10px; line-height: 1.4;'>"
+            "    仅供学习交流使用<br><b>严禁用于任何商业用途</b>"
+            "  </div>"
+            "</div>"
+        )
+        self.lbl_copyright.setObjectName("CopyrightLabel")
+        self.lbl_copyright.setOpenExternalLinks(True)
+        left_layout.addWidget(self.lbl_copyright)
+
         left_layout.addStretch()
         main_layout.addWidget(left_panel)
 
@@ -494,6 +510,18 @@ class MainWindow(QMainWindow):
                 border: 2px dashed #3A3A3A;
                 border-radius: 8px;
                 background-color: #1A1A1A;
+            }
+            #CopyrightLabel {
+                background-color: transparent;
+            }
+            #CopyrightLabel a {
+                color: #D4AF37;
+                font-weight: bold;
+                text-decoration: none;
+            }
+            #CopyrightLabel a:hover {
+                color: #E5C158;
+                text-decoration: underline;
             }
         """)
 

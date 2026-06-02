@@ -412,8 +412,18 @@
   - **高性能 Pixmap 强引用内存缓存系统**：在 `Controller` 构造函数中引入 `self.pixmap_cache = {}` 图片缓存。将缩放好的本地海报、本地剧照、网络已下载海报及网络已下载剧照（以及网络原图大图）全部以 `(path_or_url, target_width, target_height)` 作为主键存入缓存。在下一次切换到该行时，直接在主线程 **0 毫秒秒开** 渲染，彻底免去了任何重复的网络下载、本地大图读取和昂贵的 SmoothTransformation CPU 缩放计算！
   - **精细分流与资源安全释放**：扩展 `ImageLoadSignals` 信号签名并引入 `is_poster` 分流布尔参数，无缝重用了已有线程池 Worker；在一键清空任务时自动清空 `pixmap_cache`，保证极佳的内存释放卫生。
 - **风险自查**:
-  - 已调整 `test/test_crash_prevention.py` 单元测试断言以匹配全新 4 参信号分流标志。全量 11 项 pytest 单元测试已 100% 重新通过，完全无 regression 隐患，逻辑完美高内聚。
+  - 已调整 `test/test_crash_prevention.py` 单元测试断言以匹配全新 4 参信号分流标志。全量 11 项 pytest 单元测试已 100% 重新通过，完全无 regression 隐患，逻辑完美高内聚.
 - **回滚点**: `git reset --hard 63c5c11`
+
+### 40) Style: 注入 GitHub 仓库所有权可点击链接与“仅供学习，严禁商用”金色免责声明
+- **变更文件**: `gui/main_window.py`
+- **背景与目标**: 响应所有权保护要求，在客户端主界面左侧配置面板底部无缝集成带有 GitHub 仓库可点击跳转的所有权链接，并以金色醒目排版注明“仅供学习交流，严禁商业用途”的版权规范声明。
+- **技术实施**:
+  - **版权声明标签注入**：在左侧 `left_layout` 配置项的最底部，精细嵌入一个设置了 `setOpenExternalLinks(True)` 的 `QLabel` 所有权标签，其 HTML5 排版中集成了指向 `https://github.com/sangokvip/JAV-Scraper` 的超链接。
+  - **QSS 悬浮美化**：在样式表中为 `#CopyrightLabel`、`#CopyrightLabel a`、`#CopyrightLabel a:hover` 覆写专属的白金黑极简主题样式，提供极其顺滑的下划线和金色高亮 hover 反馈。
+- **风险自查**:
+  - 全量 11 项 pytest 自动化单元测试均 100% 重新绿灯通过。由于此改动纯属主界面视图层排版优化，对底层核心刮削、NFO、移动及任务持久化逻辑完全无任何副作用，安全稳健。
+- **回滚点**: `git reset --hard 1635acf`
 
 
 

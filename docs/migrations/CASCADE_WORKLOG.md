@@ -255,3 +255,17 @@
 - **风险自查**:
   - 核心业务流程未改动，仅修改网络底层的多线程调度机制。经 pytest 100% 运行通过，无任何异常。
 - **回滚点**: `git reset --hard f203838`
+
+### 25) Feature: 导入影片屏蔽磁力、详情展示原路径及整理后询问清理原文件夹
+- **变更文件**: `gui/scrape_worker.py`, `gui/controller.py`, `gui/folder_cleaner.py`, `test/test_folder_cleaner.py`, `test/test_scrape_worker.py`
+- **背景与目标**: 优化本地影片导入的工作流：屏蔽不必要的本地视频磁力爬取与展示，呈现视频原文件路径，并在批量移动整理完成后，自动检测已空的原父文件夹并询问用户是否安全删除。
+- **技术实施**:
+  - **磁力拦截分流**：在 `gui/scrape_worker.py` 中，当成功抓取元数据后，对于非虚拟任务（即本地导入视频，非手动输入番号）强行置空 `detail["magnets"] = []`，从源头阻断无用磁力展示。
+  - **原路径呈现**：在 `gui/controller.py` 的详情卡片渲染逻辑中，对非虚拟任务在左下角元数据区域追加展示其物理原文件绝对路径。
+  - **解耦清理逻辑**：新建 [gui/folder_cleaner.py](file:///Users/mac/Documents/GitHub/%20javdb-api-scraper/gui/folder_cleaner.py)，实现空文件夹盘点（忽略 `.DS_Store`, `Thumbs.db` 等）及主目录/桌面/下载/影片等系统级敏感目录白名单拦截，确保删除万无一失。
+  - **汇总单次询问**：在 `gui/controller.py` 内部维护 `self.processed_parent_dirs` 缓存。在所有后台任务全部整理完毕时，一并盘点变为空的父目录，并在主线程弹出单个确认对话框提示用户清理，选择“是”后调用 `shutil.rmtree` 物理清除。
+  - **单元测试保障**：新增 `test/test_folder_cleaner.py` 和 `test/test_scrape_worker.py`，100% 覆盖上述核心分支逻辑。
+- **风险自查**:
+  - 全套逻辑引入了强力的系统级白名单和目录存在校验，防止误删，pytest 100% 通过。
+- **回滚点**: `git reset --hard 2697b00`
+

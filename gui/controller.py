@@ -7,6 +7,7 @@ from PySide6.QtGui import QPixmap
 from gui.main_window import MainWindow
 from gui.scrape_worker import ScrapeWorker
 from lib.code_extractor import extract_code
+from gui.folder_cleaner import clean_empty_parent_dirs
 
 class SortableTableWidgetItem(QTableWidgetItem):
     def __init__(self, text, sort_value):
@@ -182,6 +183,7 @@ class Controller:
         # 存储所有正在排队或执行的任务文件：{file_path: {"code": str, "row": int, "detail": dict, "status": str}}
         self.task_files = {}
         self.current_preview_filepath = None
+        self.processed_parent_dirs = set()
 
         # 默认保存路径为项目根目录下的 output 文件夹
         default_out = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "output"))
@@ -672,6 +674,11 @@ class Controller:
                 if selected_ranges and selected_ranges[0].topRow() == info["row"]:
                     detail = info["detail"]
                     self.show_preview_details(detail, filepath, loaded_local=True)
+                
+                # 记录发生移动的源文件父目录
+                if not filepath.startswith("__virtual__:"):
+                    parent_dir = os.path.dirname(filepath)
+                    self.processed_parent_dirs.add(parent_dir)
             elif status == "scrape_success":
                 info["status"] = "已刮削(未整理)"
                 self.view.table.setItem(info["row"], 3, QTableWidgetItem("已刮削(未整理)"))
@@ -684,6 +691,35 @@ class Controller:
             else:
                 info["status"] = f"失败: {status}"
                 self.view.table.setItem(info["row"], 3, QTableWidgetItem(f"失败: {status}"))
+
+        # 检查是否所有正在执行的任务都已执行完毕
+        all_done = True
+        for fp, t_info in self.task_files.items():
+            s = t_info.get("status", "")
+            if s in ("开始执行", "准备中") or s.startswith("正在"):
+                all_done = False
+                break
+
+        if all_done and self.processed_parent_dirs:
+            empty_dirs = clean_empty_parent_dirs(self.processed_parent_dirs)
+            if empty_dirs:
+                dir_list_str = "\n".join(empty_dirs)
+                reply = QMessageBox.question(
+                    self.view,
+                    "清理空文件夹",
+                    f"以下原视频所在的文件夹在整理后已变为空，是否删除它们？\n\n{dir_list_str}",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    import shutil
+                    for pdir in empty_dirs:
+                        try:
+                            shutil.rmtree(pdir)
+                        except Exception as e:
+                            print(f"删除文件夹失败 {pdir}: {e}")
+                            QMessageBox.warning(self.view, "删除失败", f"无法删除文件夹: {pdir}\n错误: {e}")
+            self.processed_parent_dirs.clear()
 
     def handle_selection_changed(self):
         selected_ranges = self.view.table.selectedRanges()
@@ -730,8 +766,11 @@ class Controller:
             f"片商: {studio_str}\n"
             f"发行日期: {date_str}\n"
             f"演员: {actors_str}\n\n"
-            f"标签: {', '.join(detail.get('tags', []))}"
         )
+        if not filepath.startswith("__virtual__:"):
+            info_details_text += f"原文件路径: {filepath}\n\n"
+            
+        info_details_text += f"标签: {', '.join(detail.get('tags', []))}"
         self.view.lbl_info_details.setText(info_details_text)
 
         # 渲染磁力链接表格

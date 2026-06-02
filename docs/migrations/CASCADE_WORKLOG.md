@@ -269,3 +269,17 @@
   - 全套逻辑引入了强力的系统级白名单和目录存在校验，防止误删，pytest 100% 通过。
 - **回滚点**: `git reset --hard 2697b00`
 
+### 26) Fix: 修复多线程并发析构引起的 GUI 偶发段错误崩溃 (SIGSEGV)
+- **变更文件**: `gui/scrape_worker.py`, `gui/controller.py`, `test/test_crash_prevention.py`, `test/test_scrape_worker.py`
+- **背景与目标**: 彻底解决在整理/刮削完成或进行中，由于 PySide6 后台线程池自动删除 QRunnable 实例，导致 Python 包装器在非 GUI 线程中被销毁进而读写全局 wrapper 结构引发的 Segment Fault (SIGSEGV) 段错误闪退问题。
+- **技术实施**:
+  - **禁用后台析构**：对所有 `ScrapeWorker` 和 `ImageLoadWorker` 显式设置 `setAutoDelete(False)`，完全禁止 PySide 在后台子线程中删除 Worker 实例。
+  - **定义强引用队列**：在 `Controller.__init__` 中新增强引用集合 `self.active_workers = set()`，用于阻止 Python 垃圾回收在后台不确定时机意外销毁 wrapper 实例。
+  - **引入 finally 发射保障**：在 `scrape_worker.py` 和 `controller.py` 中分别给 `ScrapeWorker.run()` 和 `ImageLoadWorker.run()` 全面添加 `try-finally` 结构，无条件确保在任务终结时发射 `finished_worker(object)` 信号并携带 `self` 实例。
+  - **主线程安全回收**：在主线程 slot `on_worker_destroyed(self, worker)` 中监听该信号并执行 `self.active_workers.discard(worker)`。借由 Qt 的 `QueuedConnection` 跨线程通信特性，使所有 Worker 对象销毁及析构完全被收束至 **GUI 主线程** 中同步触发，确保多线程内存操作的绝对安全性。
+  - **单元测试保障**：重构并新增了相关的单元测试，包含 `test/test_crash_prevention.py`，完整且高可靠性地验证了主线程信号触发与安全内存回收的完整闭环。
+- **风险自查**:
+  - 核心清理算法与刮削业务均未受任何影响，仅是将所有 Worker 的生命周期从子线程析构转移至主线程，使多线程安全达到白金黑杂志级极简艺术巅峰，pytest 运行 100% 通过。
+- **回滚点**: `git reset --hard ad1c865`
+
+

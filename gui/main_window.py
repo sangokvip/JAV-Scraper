@@ -566,6 +566,55 @@ class MainWindow(QMainWindow):
                 color: #FF8550;
                 text-decoration: underline;
             }
+            /* 全局垂直滚动条美化 */
+            QScrollBar:vertical {
+                border: none;
+                background-color: #F0F2F5;
+                width: 8px;
+                margin: 0px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #D4DCE5;
+                min-height: 20px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #FF5924;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
+
+            /* 全局水平滚动条美化 */
+            QScrollBar:horizontal {
+                border: none;
+                background-color: #F0F2F5;
+                height: 8px;
+                margin: 0px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: #D4DCE5;
+                min-width: 20px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: #FF5924;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                border: none;
+                background: none;
+                width: 0px;
+            }
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: none;
+            }
         """)
 
     def update_empty_placeholder_visibility(self, is_empty: bool):

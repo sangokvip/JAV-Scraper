@@ -201,3 +201,12 @@
 - **风险自查**:
   - 完全重构了弹窗内的内部逻辑，经 pytest 运行 100% 成功，没有破坏任何核心 scraper API 业务流，无 breaking changes。
 - **回滚点**: `git reset --hard aabced6`
+
+### 20) Fix: 修复 gui/controller.py 遗漏导入 QHBoxLayout 导致点击预览图无反应的 Bug
+- **变更文件**: `gui/controller.py`
+- **背景与目标**: 解决因未导入 `QHBoxLayout` 导致 PhotoDialog 无法成功实例化、点击剧照预览无任何响应的问题。
+- **技术实施**:
+  - 在 `gui/controller.py` 顶部的 `QtWidgets` 导入中补充引入 `QHBoxLayout`。
+- **风险自查**:
+  - 属于正常依赖补充，绝无其他逻辑变更，已成功验证弹窗能立即顺畅弹起并进行轮播看图。
+- **回滚点**: `git reset --hard ce25ad4`

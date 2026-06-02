@@ -2,7 +2,7 @@ import os
 import json
 import requests
 from PySide6.QtCore import QThreadPool, Qt, Signal, QRunnable, QObject
-from PySide6.QtWidgets import QTableWidgetItem, QMessageBox, QFileDialog, QDialog, QVBoxLayout, QLabel, QTextEdit, QPushButton
+from PySide6.QtWidgets import QTableWidgetItem, QMessageBox, QFileDialog, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QPushButton
 from PySide6.QtGui import QPixmap
 from gui.main_window import MainWindow
 from gui.scrape_worker import ScrapeWorker

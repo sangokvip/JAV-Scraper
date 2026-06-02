@@ -531,42 +531,51 @@ class Controller:
         self.view.update_empty_placeholder_visibility(True)
 
     def remove_selected_task(self):
-        selected_ranges = self.view.table.selectedRanges()
-        if not selected_ranges:
+        selected_rows = set()
+        for range_obj in self.view.table.selectedRanges():
+            for r in range(range_obj.topRow(), range_obj.bottomRow() + 1):
+                selected_rows.add(r)
+                
+        if not selected_rows:
             return
             
-        row = selected_ranges[0].topRow()
+        sorted_rows = sorted(list(selected_rows), reverse=True)
+        reset_preview = False
         
-        # 寻找对应的 filepath 并从 task_files 字典中移除
-        target_fp = None
-        for fp, info in self.task_files.items():
-            if info["row"] == row:
-                target_fp = fp
-                break
-                
-        if target_fp:
-            # 1. 从数据字典中删除
-            del self.task_files[target_fp]
-            
-            # 2. 从 QTableWidget 中移除该行
-            self.view.table.removeRow(row)
-            
-            # 3. 更新剩余所有任务的 row 索引
+        for row in sorted_rows:
+            target_fp = None
             for fp, info in self.task_files.items():
-                if info["row"] > row:
-                    info["row"] -= 1
-                    
-            # 4. 更新 ID 列，使其连续
-            for r in range(self.view.table.rowCount()):
-                id_item = self.view.table.item(r, 0)
-                if id_item:
-                    id_item.setText(f"{r + 1:02d}")
-                    
-            # 5. 如果删除了当前选中的预览任务，重置右侧预览
-            if self.current_preview_filepath == target_fp:
-                self.reset_preview_panel()
-            self.save_backup()
-            self.view.update_empty_placeholder_visibility(len(self.task_files) == 0)
+                if info["row"] == row:
+                    target_fp = fp
+                    break
+            
+            if target_fp:
+                if self.current_preview_filepath == target_fp:
+                    reset_preview = True
+                # 1. 从数据字典中删除
+                if target_fp in self.task_files:
+                    del self.task_files[target_fp]
+                
+                # 2. 从 QTableWidget 中移除该行
+                self.view.table.removeRow(row)
+                
+                # 3. 更新剩余所有任务的 row 索引
+                for fp, info in self.task_files.items():
+                    if info["row"] > row:
+                        info["row"] -= 1
+
+        # 4. 更新 ID 列，使其连续
+        for r in range(self.view.table.rowCount()):
+            id_item = self.view.table.item(r, 0)
+            if id_item:
+                id_item.setText(f"{r + 1:02d}")
+                
+        # 5. 如果删除了当前选中的预览任务，重置右侧预览
+        if reset_preview:
+            self.reset_preview_panel()
+            
+        self.save_backup()
+        self.view.update_empty_placeholder_visibility(len(self.task_files) == 0)
 
     def show_table_context_menu(self, pos):
         # 获取右键点击的单元格对应的行
@@ -575,20 +584,30 @@ class Controller:
             return
             
         row = item.row()
-        # 选中整行
-        self.view.table.selectRow(row)
         
-        # 根据行号找到对应的文件路径
-        target_fp = None
-        for fp, info in self.task_files.items():
-            if info["row"] == row:
-                target_fp = fp
-                break
+        # 收集目前所有被选中的行
+        selected_rows = set()
+        for range_obj in self.view.table.selectedRanges():
+            for r in range(range_obj.topRow(), range_obj.bottomRow() + 1):
+                selected_rows.add(r)
                 
-        if not target_fp:
+        # 如果右键点击的这一行没有被包含在已选中的行中，我们把它单独选中
+        if row not in selected_rows:
+            self.view.table.selectRow(row)
+            selected_rows = {row}
+            
+        # 根据选中的行号，找到对应的所有文件路径
+        selected_fps = []
+        for r in selected_rows:
+            for fp, info in self.task_files.items():
+                if info["row"] == r:
+                    selected_fps.append(fp)
+                    break
+                    
+        if not selected_fps:
             return
             
-        info = self.task_files[target_fp]
+        count = len(selected_fps)
         
         # 创建右键菜单
         menu = QMenu(self.view)
@@ -617,18 +636,25 @@ class Controller:
             }
         """)
         
-        action_scrape = menu.addAction("仅刮削此影片")
-        action_organize = menu.addAction("仅整理此影片")
-        menu.addSeparator()
-        action_remove = menu.addAction("从列表中移除")
+        if count > 1:
+            action_scrape = menu.addAction(f"仅刮削选中的影片 ({count}部)")
+            action_organize = menu.addAction(f"仅整理选中的影片 ({count}部)")
+            menu.addSeparator()
+            action_remove = menu.addAction(f"从列表中移除选中的影片 ({count}部)")
+        else:
+            action_scrape = menu.addAction("仅刮削此影片")
+            action_organize = menu.addAction("仅整理此影片")
+            menu.addSeparator()
+            action_remove = menu.addAction("从列表中移除")
+            
+        # 只要选中的影片中有至少一个是有番号的，且不是在执行中，就可用
+        any_has_code = any(self.task_files[fp]["code"] for fp in selected_fps)
+        any_running = any(self.task_files[fp]["status"] in ["正在刮削...", "整理中..."] for fp in selected_fps)
         
-        # 如果没有输入番号，置灰刮削和整理
-        if not info["code"]:
+        if not any_has_code:
             action_scrape.setEnabled(False)
             action_organize.setEnabled(False)
-            
-        # 如果正在进行中，置灰
-        if info["status"] in ["正在刮削...", "整理中..."]:
+        if any_running:
             action_scrape.setEnabled(False)
             action_organize.setEnabled(False)
             
@@ -637,20 +663,16 @@ class Controller:
         selected_action = menu.exec(global_pos)
         
         if selected_action == action_scrape:
-            self.scrape_single_task(target_fp)
+            self.scrape_multiple_tasks(selected_fps)
         elif selected_action == action_organize:
-            self.organize_single_task(target_fp)
+            self.organize_multiple_tasks(selected_fps)
         elif selected_action == action_remove:
             self.remove_selected_task()
 
-    def scrape_single_task(self, file_path):
+    def scrape_multiple_tasks(self, file_paths):
         output_dir = self.view.path_input.text().strip()
         if not output_dir:
             QMessageBox.warning(self.view, "警告", "请先选择目标保存路径！")
-            return
-            
-        info = self.task_files.get(file_path)
-        if not info or not info["code"]:
             return
             
         proxies = None
@@ -659,31 +681,34 @@ class Controller:
             proxies = {"http": proxy, "https": proxy} if proxy else None
         platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
         
-        code = info["code"]
-        info["status"] = "正在刮削..."
-        row = info["row"]
-        self.view.table.setItem(row, 3, QTableWidgetItem("正在刮削..."))
-        
-        worker = ScrapeWorker(file_path, code, output_dir, platform, proxies, only_scrape=True)
-        worker.setAutoDelete(False)
-        worker.signals.started.connect(self.on_worker_started)
-        worker.signals.progress.connect(self.on_worker_progress)
-        worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
-        worker.signals.finished.connect(self.on_worker_finished)
-        worker.signals.finished_worker.connect(self.on_worker_destroyed)
-        
-        self.active_workers.add(worker)
-        self.scrape_pool.start(worker)
+        for fp in file_paths:
+            info = self.task_files.get(fp)
+            if not info or not info["code"]:
+                continue
+            if info["status"] in ["正在刮削...", "整理中..."]:
+                continue
+                
+            code = info["code"]
+            info["status"] = "正在刮削..."
+            row = info["row"]
+            self.view.table.setItem(row, 3, QTableWidgetItem("正在刮削..."))
+            
+            worker = ScrapeWorker(fp, code, output_dir, platform, proxies, only_scrape=True)
+            worker.setAutoDelete(False)
+            worker.signals.started.connect(self.on_worker_started)
+            worker.signals.progress.connect(self.on_worker_progress)
+            worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
+            worker.signals.finished.connect(self.on_worker_finished)
+            worker.signals.finished_worker.connect(self.on_worker_destroyed)
+            
+            self.active_workers.add(worker)
+            self.scrape_pool.start(worker)
         self.save_backup()
 
-    def organize_single_task(self, file_path):
+    def organize_multiple_tasks(self, file_paths):
         output_dir = self.view.path_input.text().strip()
         if not output_dir:
             QMessageBox.warning(self.view, "警告", "请先选择目标保存路径！")
-            return
-            
-        info = self.task_files.get(file_path)
-        if not info or not info["code"]:
             return
             
         proxies = None
@@ -692,22 +717,28 @@ class Controller:
             proxies = {"http": proxy, "https": proxy} if proxy else None
         platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
         
-        code = info["code"]
-        info["status"] = "整理中..."
-        row = info["row"]
-        self.view.table.setItem(row, 3, QTableWidgetItem("整理中..."))
-        
-        # 已经刮削过的话，直接传入 info["detail"] 作为缓存，免去网络请求
-        worker = ScrapeWorker(file_path, code, output_dir, platform, proxies, only_scrape=False, cached_detail=info["detail"])
-        worker.setAutoDelete(False)
-        worker.signals.started.connect(self.on_worker_started)
-        worker.signals.progress.connect(self.on_worker_progress)
-        worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
-        worker.signals.finished.connect(self.on_worker_finished)
-        worker.signals.finished_worker.connect(self.on_worker_destroyed)
-        
-        self.active_workers.add(worker)
-        self.scrape_pool.start(worker)
+        for fp in file_paths:
+            info = self.task_files.get(fp)
+            if not info or not info["code"]:
+                continue
+            if info["status"] == "整理中...":
+                continue
+                
+            code = info["code"]
+            info["status"] = "整理中..."
+            row = info["row"]
+            self.view.table.setItem(row, 3, QTableWidgetItem("整理中..."))
+            
+            worker = ScrapeWorker(fp, code, output_dir, platform, proxies, only_scrape=False, cached_detail=info["detail"])
+            worker.setAutoDelete(False)
+            worker.signals.started.connect(self.on_worker_started)
+            worker.signals.progress.connect(self.on_worker_progress)
+            worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
+            worker.signals.finished.connect(self.on_worker_finished)
+            worker.signals.finished_worker.connect(self.on_worker_destroyed)
+            
+            self.active_workers.add(worker)
+            self.scrape_pool.start(worker)
         self.save_backup()
 
     def reset_preview_panel(self):
@@ -1150,7 +1181,9 @@ class Controller:
             self.reset_preview_panel()
             return
             
-        row = selected_ranges[0].topRow()
+        row = self.view.table.currentRow()
+        if row < 0:
+            row = selected_ranges[0].topRow()
         filepath = None
         info = None
         for fp, task_info in self.task_files.items():

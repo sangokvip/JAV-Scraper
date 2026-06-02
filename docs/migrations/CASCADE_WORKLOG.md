@@ -492,7 +492,20 @@
   - **单影片独立处理分流**：新增 `scrape_single_task` 与 `organize_single_task` 业务方法，根据所选行的物理文件路径单独拉起 `ScrapeWorker` 并向 QThreadPool 线程池注册，实现了毫秒级单任务精确调度流。
 - **风险自查**:
   - 核心工作 Worker 复用了已被大批量验证的 ScrapeWorker 类，任务备份机制及 UI 进度监听亦能够安全联动，系统极度稳健。
+- **回滚点**: `git reset --hard 922af80`
+
+### 48) Feature: 升级任务表格为多选模式，全面支持多选批量刮削、批量整理及批量移除
+- **变更文件**: `gui/main_window.py`, `gui/controller.py`
+- **背景与目标**: 响应列表多选操作需求，允许用户使用 Shift/Ctrl/Cmd 或鼠标拖选多行任务，从而执行批量性的刮削、整理或安全移除，大幅度提升大批量视频处理的工作效率。
+- **技术实施**:
+  - **多选选择模式重置**：将 `main_window.py` 里的 `table.setSelectionMode` 变更为 `ExtendedSelection`。
+  - **安全降级批量移除**：重写 `remove_selected_task` 方法。遍历选中 Ranges 展开为行号集合，对其降序排序后逐个执行删除，同步更新剩余任务的行号，避免物理行删除所带来的索引值错位问题。
+  - **右键菜单动态计数与联动**：重构 `show_table_context_menu`。自动统计多选行数并动态将菜单文案展示为“仅刮削选中的影片 (X部)”、“仅整理选中的影片 (X部)”等，若多选列表里有任何一个任务包含番号且不处于处理中，则智能解锁菜单项操作。
+  - **多影片处理任务池投递**：新增 `scrape_multiple_tasks` 和 `organize_multiple_tasks` 分流方法，批量启动 ScrapeWorker 异步进行处理，将单影片独立处理机制精简归纳。并在 `handle_selection_changed` 中对当前有焦点的行（`currentRow`）作为详情展示的第一优先级，确保多选状态下详情面板稳定渲染不崩溃。
+- **风险自查**:
+  - 批量操作充分复用了原有的任务流，状态同步与持久化备份能正常记录且无泄漏风险。
 - **回滚点**: `git reset --hard HEAD~1`
+
 
 
 

@@ -69,7 +69,7 @@ class PhotoDialog(QDialog):
         # 底部页码
         self.lbl_info = QLabel()
         self.lbl_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_info.setStyleSheet("color: #D4AF37; font-weight: bold; font-size: 12px; margin-top: 2px;")
+        self.lbl_info.setStyleSheet("color: #FF5924; font-weight: bold; font-size: 12px; margin-top: 2px;")
         main_layout.addWidget(self.lbl_info)
         
         # 渲染当前图片
@@ -78,29 +78,31 @@ class PhotoDialog(QDialog):
         # 样式美化（只作用于看图窗口内，不污染外部）
         self.setStyleSheet("""
             QDialog {
-                background-color: #121212;
+                background-color: #FFFFFF;
+                border: 1.5px solid #E5EAF2;
+                border-radius: 16px;
             }
             QPushButton#PrevPhotoBtn, QPushButton#NextPhotoBtn {
-                background-color: rgba(46, 46, 46, 0.6);
-                border: 1px solid #444444;
+                background-color: rgba(255, 255, 255, 0.8);
+                border: 1px solid #E5EAF2;
                 border-radius: 20px;
                 min-width: 40px;
                 min-height: 40px;
                 max-width: 40px;
                 max-height: 40px;
                 font-size: 16px;
-                color: #F5F5F7;
+                color: #4A5465;
                 font-weight: bold;
             }
             QPushButton#PrevPhotoBtn:hover, QPushButton#NextPhotoBtn:hover {
-                background-color: rgba(212, 175, 55, 0.8);
-                border-color: #D4AF37;
-                color: #121212;
+                background-color: rgba(255, 89, 36, 0.08);
+                border-color: #FF5924;
+                color: #FF5924;
             }
             QPushButton#PrevPhotoBtn:disabled, QPushButton#NextPhotoBtn:disabled {
-                background-color: rgba(30, 30, 30, 0.3);
-                border-color: #2C2C2C;
-                color: #555555;
+                background-color: rgba(240, 242, 245, 0.3);
+                border-color: #E5EAF2;
+                color: #C0C4CC;
             }
         """)
 
@@ -882,7 +884,7 @@ class Controller:
                     layout.setSpacing(2)
                     
                     lbl = QLabel(message)
-                    lbl.setStyleSheet("color: #F5F5F7; font-size: 11px; font-weight: normal; background-color: transparent;")
+                    lbl.setStyleSheet("color: #1A1C2E; font-size: 11px; font-weight: normal; background-color: transparent;")
                     lbl.setObjectName("ProgressLabel")
                     
                     bar = QProgressBar()
@@ -892,13 +894,13 @@ class Controller:
                     bar.setTextVisible(False)
                     bar.setStyleSheet("""
                         QProgressBar {
-                            border: 1px solid #3A3A3A;
+                            border: 1px solid #E5EAF2;
                             border-radius: 3px;
-                            background-color: #2A2A2A;
+                            background-color: #F0F2F5;
                             height: 6px;
                         }
                         QProgressBar::chunk {
-                            background-color: #D4AF37;
+                            background-color: #FF5924;
                             border-radius: 2px;
                         }
                     """)
@@ -1025,8 +1027,8 @@ class Controller:
             self.reset_preview_panel()
             self.view.lbl_info_title.setText(
                 f"<div style='margin-top: 10px;'>"
-                f"  <span style='color: #8E8E93; font-size: 11px; font-weight: bold; background-color: #2E2E2E; padding: 2px 6px; border-radius: 3px;'>本地影片</span>"
-                f"  <div style='color: #F5F5F7; font-size: 13px; font-weight: bold; margin-top: 6px; line-height: 1.35;'>{os.path.basename(filepath)}</div>"
+                f"  <span style='color: #748297; font-size: 11px; font-weight: bold; background-color: #F0F2F5; padding: 2px 6px; border-radius: 3px;'>本地影片</span>"
+                f"  <div style='color: #1A1C2E; font-size: 13px; font-weight: bold; margin-top: 6px; line-height: 1.35;'>{os.path.basename(filepath)}</div>"
                 f"</div>"
             )
             self.view.lbl_info_details.setText(f"当前状态: {info['status']}\n完整路径: {filepath}")
@@ -1037,8 +1039,8 @@ class Controller:
         title = detail.get("title", "")
         self.view.lbl_info_title.setText(
             f"<div style='margin-top: 10px;'>"
-            f"  <span style='color: #FF5924; font-size: 11px; font-weight: bold; background-color: #252636; padding: 3px 10px; border-radius: 12px; border: 1.5px solid #FF5924;'>{code}</span>"
-            f"  <div style='color: #F5F5F7; font-family: Lora, Georgia, serif; font-style: italic; font-size: 15px; font-weight: 500; margin-top: 10px; line-height: 1.35;'>{title}</div>"
+            f"  <span style='color: #FF5924; font-size: 11px; font-weight: bold; background-color: #FFF1F1; padding: 3px 10px; border-radius: 12px; border: 1.5px solid #FF5924;'>{code}</span>"
+            f"  <div style='color: #1A1C2E; font-family: Lora, Georgia, serif; font-style: italic; font-size: 15px; font-weight: 500; margin-top: 10px; line-height: 1.35;'>{title}</div>"
             f"</div>"
         )
 

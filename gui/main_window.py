@@ -85,14 +85,14 @@ class MainWindow(QMainWindow):
         self.lbl_proxy_status.setObjectName("ProxyStatusLabel")
         left_layout.addWidget(self.lbl_proxy_status)
 
-        # 联动更新提示状态和颜色
+        # 联动更新提示状态 and 颜色
         def update_proxy_status_label(checked):
             if checked:
                 self.lbl_proxy_status.setText("代理状态: 未测试")
-                self.lbl_proxy_status.setStyleSheet("color: #8E8E93;")
+                self.lbl_proxy_status.setStyleSheet("color: #748297;")
             else:
                 self.lbl_proxy_status.setText("代理状态: 系统代理模式")
-                self.lbl_proxy_status.setStyleSheet("color: #D4AF37;")
+                self.lbl_proxy_status.setStyleSheet("color: #FF5924;")
         self.chk_custom_proxy.toggled.connect(update_proxy_status_label)
 
         # Cookie 导入
@@ -114,12 +114,12 @@ class MainWindow(QMainWindow):
 
         # 所有权展示与免责声明
         self.lbl_copyright = QLabel(
-            "<div style='text-align: center; margin-top: 15px; border-top: 1px solid #2C2C2C; padding-top: 12px;'>"
-            "  <div style='color: #8E8E93; font-size: 11px; margin-bottom: 4px;'><b>所有权归属</b></div>"
-            "  <div style='color: #D4AF37; font-size: 11px; font-weight: bold; margin-bottom: 6px;'>"
-            "    <a href='https://github.com/sangokvip/JAV-Scraper' style='color: #D4AF37; text-decoration: none;'>GitHub: JAV-Scraper</a>"
+            "<div style='text-align: center; margin-top: 15px; border-top: 1px solid #E5EAF2; padding-top: 12px;'>"
+            "  <div style='color: #748297; font-size: 11px; margin-bottom: 4px;'><b>所有权归属</b></div>"
+            "  <div style='color: #FF5924; font-size: 11px; font-weight: bold; margin-bottom: 6px;'>"
+            "    <a href='https://github.com/sangokvip/JAV-Scraper' style='color: #FF5924; text-decoration: none;'>GitHub: JAV-Scraper</a>"
             "  </div>"
-            "  <div style='color: #8E8E93; font-size: 10px; line-height: 1.4;'>"
+            "  <div style='color: #748297; font-size: 10px; line-height: 1.4;'>"
             "    仅供学习交流使用<br><b>严禁用于任何商业用途</b>"
             "  </div>"
             "</div>"
@@ -170,11 +170,11 @@ class MainWindow(QMainWindow):
         lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         lbl_title = QLabel("开启您的影片极速整理之旅")
-        lbl_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #D4AF37; margin-bottom: 5px; background-color: transparent;")
+        lbl_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #FF5924; margin-bottom: 5px; background-color: transparent;")
         lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         lbl_desc = QLabel("将视频文件或文件夹拖拽至上方虚线盘，或者直接双击表格行编辑番号即可开始。")
-        lbl_desc.setStyleSheet("font-size: 12px; color: #8E8E93; line-height: 1.4; background-color: transparent;")
+        lbl_desc.setStyleSheet("font-size: 12px; color: #748297; line-height: 1.4; background-color: transparent;")
         lbl_desc.setWordWrap(True)
         lbl_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_desc.setFixedWidth(400)
@@ -314,45 +314,47 @@ class MainWindow(QMainWindow):
     def apply_stylesheet(self):
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #0D0E15;
+                background-color: #FFFFFF;
             }
             QWidget {
-                color: #F5F5F7;
+                color: #1A1C2E;
                 font-family: "Inter", "SF Pro Display", "PingFang SC", "Segoe UI", sans-serif;
                 font-size: 13px;
             }
             #LeftPanel, #RightPanel {
-                background-color: #1A1C2E;
+                background-color: #F5F7F9;
                 border-radius: 16px;
-                border: 1px solid #2C2E3E;
+                border: 1px solid #E5EAF2;
             }
             QLabel {
                 font-weight: bold;
+                color: #1A1C2E;
             }
             QLineEdit, QTextEdit {
-                background-color: #252636;
-                border: 1px solid #3A3D52;
+                background-color: #FFFFFF;
+                border: 1px solid #E5EAF2;
                 border-radius: 8px;
                 padding: 6px 10px;
-                color: #F5F5F7;
+                color: #1A1C2E;
             }
             QLineEdit:focus, QTextEdit:focus {
                 border: 1.5px solid #FF5924;
             }
             QPushButton {
-                background-color: #252636;
-                border: 1.5px solid #3A3D52;
+                background-color: #FFFFFF;
+                border: 1.5px solid #E5EAF2;
                 border-radius: 20px;
                 padding: 8px 16px;
                 font-weight: 600;
-                color: #F5F5F7;
+                color: #4A5465;
             }
             QPushButton:hover {
-                background-color: #2C2D42;
+                background-color: #F5F7F9;
                 border-color: #FF5924;
+                color: #1A1C2E;
             }
             QPushButton:pressed {
-                background-color: #1E1F30;
+                background-color: #E5EAF2;
                 padding-top: 9px;
                 padding-bottom: 7px;
             }
@@ -362,23 +364,24 @@ class MainWindow(QMainWindow):
                 color: #FF5924;
             }
             #StartBtn:hover {
-                background-color: rgba(255, 89, 36, 0.15);
+                background-color: rgba(255, 89, 36, 0.08);
                 color: #FF8550;
                 border-color: #FF8550;
             }
             #StartBtn:pressed {
-                background-color: rgba(255, 89, 36, 0.25);
+                background-color: rgba(255, 89, 36, 0.15);
                 padding-top: 9px;
                 padding-bottom: 7px;
             }
             #AddCodeBtn {
                 background-color: transparent;
-                border: 1.5px solid #3A3D52;
-                color: #F5F5F7;
+                border: 1.5px solid #E5EAF2;
+                color: #4A5465;
             }
             #AddCodeBtn:hover {
-                background-color: #2C2D42;
+                background-color: #F5F7F9;
                 border-color: #FF5924;
+                color: #1A1C2E;
             }
             #OrganizeBtn {
                 background-color: #FF5924;
@@ -395,8 +398,8 @@ class MainWindow(QMainWindow):
                 padding-bottom: 7px;
             }
             #SamplesScroll {
-                background-color: #252636;
-                border: 1px solid #3A3D52;
+                background-color: #FFFFFF;
+                border: 1px solid #E5EAF2;
                 border-radius: 12px;
             }
             #SamplesTitle {
@@ -405,7 +408,7 @@ class MainWindow(QMainWindow):
                 margin-top: 5px;
             }
             #CustomProxyCheck {
-                color: #F5F5F7;
+                color: #1A1C2E;
                 font-weight: bold;
             }
             #MagnetTitle {
@@ -414,13 +417,13 @@ class MainWindow(QMainWindow):
                 margin-top: 5px;
             }
             #MagnetTable {
-                background-color: #252636;
-                border: 1px solid #3A3D52;
+                background-color: #FFFFFF;
+                border: 1px solid #E5EAF2;
                 border-radius: 12px;
-                gridline-color: #2C2E3E;
+                gridline-color: #E5EAF2;
             }
             #MagnetTable::item {
-                color: #F5F5F7;
+                color: #1A1C2E;
                 padding: 4px;
             }
             #CopyMagnetBtn {
@@ -440,66 +443,67 @@ class MainWindow(QMainWindow):
             }
             #RemoveSelectedBtn {
                 background-color: transparent;
-                border: 1.5px solid #3A3D52;
+                border: 1.5px solid #E5EAF2;
                 color: #FF453A;
             }
             #RemoveSelectedBtn:hover {
-                background-color: rgba(255, 69, 58, 0.1);
+                background-color: rgba(255, 69, 58, 0.08);
                 border-color: #FF453A;
             }
             #RemoveSelectedBtn:pressed {
-                background-color: rgba(255, 69, 58, 0.2);
+                background-color: rgba(255, 69, 58, 0.15);
                 padding-top: 9px;
                 padding-bottom: 7px;
             }
             #RetryFailedBtn {
                 background-color: transparent;
-                border: 1.5px solid #D4AF37;
-                color: #D4AF37;
+                border: 1.5px solid #E5A73B;
+                color: #E5A73B;
             }
             #RetryFailedBtn:hover {
-                background-color: rgba(212, 175, 55, 0.1);
-                color: #E5C158;
-                border-color: #E5C158;
+                background-color: rgba(229, 167, 59, 0.08);
+                color: #F0B849;
+                border-color: #F0B849;
             }
             #RetryFailedBtn:pressed {
-                background-color: rgba(212, 175, 55, 0.2);
+                background-color: rgba(229, 167, 59, 0.15);
                 padding-top: 9px;
                 padding-bottom: 7px;
             }
             #DropZone {
-                border: 2px dashed #4A4D68;
+                border: 2px dashed #D4DCE5;
                 border-radius: 12px;
-                background-color: #1A1C2E;
-                color: #8892A1;
+                background-color: #F5F7F9;
+                color: #748297;
                 font-size: 14px;
             }
             #DropZone:hover {
                 border-color: #FF5924;
-                background-color: #20223A;
+                background-color: #FFF1F1;
             }
             QTableWidget {
-                background-color: #1A1C2E;
-                alternate-background-color: #20223A;
-                gridline-color: #2C2E3E;
-                border: 1px solid #2C2E3E;
+                background-color: #FFFFFF;
+                alternate-background-color: #F5F7F9;
+                gridline-color: #E5EAF2;
+                border: 1px solid #E5EAF2;
                 border-radius: 12px;
             }
             QTableWidget::item {
+                color: #1A1C2E;
                 padding: 5px;
             }
             QHeaderView::section {
-                background-color: #252636;
-                color: #F5F5F7;
+                background-color: #F0F2F5;
+                color: #4A5465;
                 padding: 6px;
-                border: 1px solid #2C2E3E;
+                border: 1px solid #E5EAF2;
                 font-weight: bold;
             }
             #CoverPreview {
-                background-color: #252636;
-                border: 1px solid #3A3D52;
+                background-color: #F5F7F9;
+                border: 1px solid #E5EAF2;
                 border-radius: 16px;
-                color: #8892A1;
+                color: #748297;
             }
             #InfoTitle {
                 font-family: "Lora", "Georgia", "Times New Roman", serif;
@@ -508,42 +512,43 @@ class MainWindow(QMainWindow):
                 font-weight: bold;
             }
             #InfoDetails {
-                color: #8892A1;
+                color: #4A5465;
                 line-height: 1.5;
             }
             QMessageBox, QDialog, QInputDialog {
-                background-color: #1A1C2E;
-                border: 1px solid #2C2E3E;
+                background-color: #FFFFFF;
+                border: 1px solid #E5EAF2;
                 border-radius: 16px;
             }
             QMessageBox QLabel, QInputDialog QLabel {
-                color: #F5F5F7;
+                color: #1A1C2E;
                 font-size: 13px;
             }
             QMessageBox QPushButton, QInputDialog QPushButton {
-                background-color: #252636;
-                border: 1.5px solid #3A3D52;
-                color: #F5F5F7;
+                background-color: #FFFFFF;
+                border: 1.5px solid #E5EAF2;
+                color: #4A5465;
                 padding: 6px 14px;
                 font-weight: bold;
                 border-radius: 15px;
                 min-width: 75px;
             }
             QMessageBox QPushButton:hover, QInputDialog QPushButton:hover {
-                background-color: #2C2D42;
+                background-color: #F5F7F9;
                 border-color: #FF5924;
+                color: #1A1C2E;
             }
             QTableWidget QLineEdit {
                 padding: 0px;
                 border: 1px solid #FF5924;
                 border-radius: 0px;
-                background-color: #252636;
-                color: #F5F5F7;
+                background-color: #FFFFFF;
+                color: #1A1C2E;
             }
             #EmptyPlaceholder {
-                border: 2px dashed #3A3D52;
+                border: 2px dashed #D4DCE5;
                 border-radius: 12px;
-                background-color: #151624;
+                background-color: #F5F7F9;
             }
             #CopyrightLabel {
                 background-color: transparent;
@@ -571,7 +576,7 @@ class MainWindow(QMainWindow):
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
-            self.drop_label.setStyleSheet("border-color: #D4AF37; background-color: #252525;")
+            self.drop_label.setStyleSheet("border-color: #FF5924; background-color: rgba(255, 89, 36, 0.08);")
 
     def dragLeaveEvent(self, event):
         self.drop_label.setStyleSheet("")

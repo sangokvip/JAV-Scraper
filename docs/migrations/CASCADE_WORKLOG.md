@@ -210,3 +210,15 @@
 - **风险自查**:
   - 属于正常依赖补充，绝无其他逻辑变更，已成功验证弹窗能立即顺畅弹起并进行轮播看图。
 - **回滚点**: `git reset --hard ce25ad4`
+
+### 21) Refactor: 移除导入视频按钮，并重定向至点击虚线拖入提示区直接弹出选择框
+- **变更文件**: `gui/main_window.py`, `gui/controller.py`
+- **背景与目标**: 优化控制栏的按钮排布，去除累赘按钮，将文件拖入与点击导入两大高频行为整合到一个提示区域中，实现更简洁现代的 GUI 交互体验。
+- **技术实施**:
+  - 在 `gui/main_window.py` 中将原有的 `self.drop_label` 替换为自定义可响应点击信号的 `ClickableDropLabel`。
+  - 修改其引导提示语，并为其显式设置 `PointingHandCursor` 指针手势以提升点击可感知度。
+  - 从 `gui/main_window.py` 底部控制区中移除了 `btn_import_files`（“导入视频文件...”按钮）。
+  - 在 `gui/controller.py` 中将原绑定于该按钮上的事件逻辑重定向至 `self.view.drop_label.clicked`，实现用户点击拖拽框任一处即能瞬间弹出文件选择框。
+- **风险自查**:
+  - 属于界面按键整理与控制重定向，测试用例 100% 成功，未触及任何刮削及 NFO 输出的底层业务，安全无破坏性。
+- **回滚点**: `git reset --hard b149908`

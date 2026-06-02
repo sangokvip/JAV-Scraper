@@ -8,6 +8,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
 
+class ClickableDropLabel(QLabel):
+    clicked = Signal()
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+
 class MainWindow(QMainWindow):
     files_dropped = Signal(list)  # 拖入的文件路径列表
 
@@ -108,10 +114,11 @@ class MainWindow(QMainWindow):
         center_layout.setSpacing(10)
 
         # 拖拽占位盘 / 提示
-        self.drop_label = QLabel("拖入视频文件或整个文件夹至此\n(支持批量自动识别番号并校对)")
+        self.drop_label = ClickableDropLabel("拖入视频文件或整个文件夹至此，或点击此处选择视频\n(支持批量自动识别番号并校对)")
         self.drop_label.setObjectName("DropZone")
         self.drop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.drop_label.setFixedHeight(100)
+        self.drop_label.setCursor(Qt.CursorShape.PointingHandCursor)
         center_layout.addWidget(self.drop_label)
 
         # 任务表格
@@ -135,14 +142,11 @@ class MainWindow(QMainWindow):
         btn_row1_layout = QHBoxLayout()
         self.btn_clear = QPushButton("一键清空")
         self.btn_clear.setObjectName("ClearBtn")
-        self.btn_import_files = QPushButton("导入视频文件...")
-        self.btn_import_files.setObjectName("ImportFilesBtn")
         self.btn_import_dir = QPushButton("导入文件夹...")
         self.btn_import_dir.setObjectName("ImportDirBtn")
         self.btn_add_code = QPushButton("手动输入番号...")
         self.btn_add_code.setObjectName("AddCodeBtn")
         btn_row1_layout.addWidget(self.btn_clear)
-        btn_row1_layout.addWidget(self.btn_import_files)
         btn_row1_layout.addWidget(self.btn_import_dir)
         btn_row1_layout.addWidget(self.btn_add_code)
         btn_control_layout.addLayout(btn_row1_layout)

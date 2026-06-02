@@ -189,7 +189,7 @@ class Controller:
         self.view.files_dropped.connect(self.handle_files_dropped)
         self.view.btn_browse.clicked.connect(self.browse_output_dir)
         self.view.btn_clear.clicked.connect(self.clear_all_tasks)
-        self.view.btn_import_files.clicked.connect(lambda: self.import_files_manually())
+        self.view.drop_label.clicked.connect(lambda: self.import_files_manually())
         self.view.btn_import_dir.clicked.connect(lambda: self.import_dir_manually())
         self.view.btn_add_code.clicked.connect(lambda: self.add_code_manually())
         self.view.btn_start.clicked.connect(self.start_scraping)

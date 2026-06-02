@@ -559,6 +559,27 @@
   - GUI 核心导入依赖与加载解析通过纯命令行脚本编译验证，100% 绿灯且无遗留模块导入警告。
 - **回滚点**: `git reset --hard HEAD~1`
 
+### 54) Feature: 手动输入番号任务整理落盘新增二次确认弹窗
+- **变更文件**: `gui/controller.py`
+- **背景与目标**: 针对手动输入番号（无物理视频文件）的影片任务，点击整理落盘时弹窗提醒用户本地无视频并询问是否继续，避免用户误操作。
+- **技术实施**:
+  - 在 `Controller.start_organizing` 中增加对待整理的虚拟任务（以 `__virtual__:` 开头）的扫描检测，若存在则使用 `QMessageBox.question` 弹出确认框。
+  - 在 `Controller.organize_multiple_tasks` 中同步重构并增加相同的检测与确认提示逻辑。
+- **风险自查**:
+  - 本改动仅涉及弹窗逻辑和列表任务过滤，无 breaking changes，完全兼容且不影响本地真实视频文件的刮削整理逻辑。
+- **回滚点**: `git checkout HEAD -- gui/controller.py`
+
+### 55) Feature: 实现多尺寸多格式艺术图标转换、UI窗口图标绑定以及Mac/Win双端自动化打包部署
+- **变更文件**: `gui/main_window.py`、`convert_icon.py`、`build_mac.sh`、`build_win.bat`、`README.md`，物理拷贝并重命名 `app_icon_orig.png`。
+- **背景与目标**: 响应打包 macOS/Windows 专属格式及封装前设计应用图标的要求。使用已生成的艺术 Logo 生成多格式平台图标，并分别配置双端自动化打包方案。
+- **技术实施**:
+  - **多尺寸图标转换**：创建 `convert_icon.py` 脚本，使用 Pillow 库自动读取源文件 `app_icon_orig.png`，并转换输出为 256x256 的 `gui/icon.png`，以及包含 16~256 多种分辨率大小的 Windows 复合图标 `icon.ico` 和 macOS 专属的图标包 `icon.icns`。
+  - **窗口图标设置**：修改 `gui/main_window.py`，在 `MainWindow` 构造函数中使用 `QIcon` 加载 `gui/icon.png` 以统一应用窗口图标。
+  - **自动化打包编译**：编写 `build_mac.sh` 脚本和 `build_win.bat` 脚本。通过 `pyinstaller` 的 `--windowed` 模式和 `--collect-all curl_cffi` 参数处理第三方复杂库依赖，在 macOS 本地生成 `dist/JAV SCRAPER.app` 专属程序包，并为 Windows 打包提供自动化一键编译支持。
+  - **README 指南撰写**：在 `README.md` 中补充关于平台打包的步骤和注意事项，供开发者和最终用户阅读。
+- **风险自查**:
+  - 在 macOS 本地通过 `sh build_mac.sh` 完整执行了打包过程，成功输出了 `dist/JAV SCRAPER.app` 并在本地测试可流畅载入、且 Dock 及窗口能完美呈现定制设计的图标。
+- **回滚点**: `git reset --hard HEAD~1`
 
 
 

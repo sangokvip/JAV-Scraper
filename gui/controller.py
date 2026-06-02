@@ -711,19 +711,38 @@ class Controller:
             QMessageBox.warning(self.view, "警告", "请先选择目标保存路径！")
             return
             
-        proxies = None
-        if self.view.chk_custom_proxy.isChecked():
-            proxy = self.view.proxy_input.text().strip()
-            proxies = {"http": proxy, "https": proxy} if proxy else None
-        platform = "javdb"
-        
+        todo_files = []
         for fp in file_paths:
             info = self.task_files.get(fp)
             if not info or not info["code"]:
                 continue
             if info["status"] == "整理中...":
                 continue
-                
+            todo_files.append(fp)
+            
+        if not todo_files:
+            return
+
+        # 检查是否包含手动输入番号的影片 (虚拟任务)
+        has_virtual = any(fp.startswith("__virtual__:") for fp in todo_files)
+        if has_virtual:
+            reply = QMessageBox.question(
+                self.view, "提示",
+                "包含手动输入番号的影片，本地并无此视频。是否继续整理落盘？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        proxies = None
+        if self.view.chk_custom_proxy.isChecked():
+            proxy = self.view.proxy_input.text().strip()
+            proxies = {"http": proxy, "https": proxy} if proxy else None
+        platform = "javdb"
+        
+        for fp in todo_files:
+            info = self.task_files.get(fp)
             code = info["code"]
             info["status"] = "整理中..."
             row = info["row"]
@@ -1000,6 +1019,18 @@ class Controller:
             if reply == QMessageBox.StandardButton.Yes:
                 todo_files = done_files
             else:
+                return
+
+        # 检查是否包含手动输入番号的影片 (虚拟任务)
+        has_virtual = any(fp.startswith("__virtual__:") for fp in todo_files)
+        if has_virtual:
+            reply = QMessageBox.question(
+                self.view, "提示",
+                "包含手动输入番号的影片，本地并无此视频。是否继续整理落盘？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
                 return
 
         proxies = None

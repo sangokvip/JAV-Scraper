@@ -142,6 +142,32 @@ class MainWindow(QMainWindow):
         self.table.verticalHeader().setVisible(False)
         center_layout.addWidget(self.table)
 
+        # 无任务占位提示区
+        self.empty_placeholder = QWidget()
+        self.empty_placeholder.setObjectName("EmptyPlaceholder")
+        ep_layout = QVBoxLayout(self.empty_placeholder)
+        ep_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ep_layout.setContentsMargins(20, 20, 20, 20)
+        
+        lbl_icon = QLabel("🎬")
+        lbl_icon.setStyleSheet("font-size: 42px; margin-bottom: 8px; background-color: transparent;")
+        lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        lbl_title = QLabel("开启您的影片极速整理之旅")
+        lbl_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #D4AF37; margin-bottom: 5px; background-color: transparent;")
+        lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        lbl_desc = QLabel("将视频文件或文件夹拖拽至上方虚线盘，或者直接双击表格行编辑番号即可开始。")
+        lbl_desc.setStyleSheet("font-size: 12px; color: #8E8E93; line-height: 1.4; background-color: transparent;")
+        lbl_desc.setWordWrap(True)
+        lbl_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_desc.setFixedWidth(400)
+        
+        ep_layout.addWidget(lbl_icon)
+        ep_layout.addWidget(lbl_title)
+        ep_layout.addWidget(lbl_desc)
+        center_layout.addWidget(self.empty_placeholder)
+
         # 操作按钮控制栏
         btn_control_layout = QVBoxLayout()
         btn_control_layout.setSpacing(6)
@@ -433,7 +459,20 @@ class MainWindow(QMainWindow):
                 background-color: #2A2A2A;
                 color: #F5F5F7;
             }
+            #EmptyPlaceholder {
+                border: 2px dashed #3A3A3A;
+                border-radius: 8px;
+                background-color: #1A1A1A;
+            }
         """)
+
+    def update_empty_placeholder_visibility(self, is_empty: bool):
+        if is_empty:
+            self.table.hide()
+            self.empty_placeholder.show()
+        else:
+            self.table.show()
+            self.empty_placeholder.hide()
 
     # 拖拽事件捕获
     def dragEnterEvent(self, event: QDragEnterEvent):

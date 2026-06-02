@@ -71,6 +71,13 @@ class ScrapeWorker(QRunnable):
                     clean_title = clean_title.replace(char, " ")
                 folder_name = f"[{self.code}] {clean_title}"[:120].strip() # 限制最大长度
                 target_folder = os.path.join(self.output_dir, folder_name)
+                
+                # 安全防御：防范路径穿越 (Path Traversal)，确保目标绝对路径在前缀包含范围内
+                abs_target = os.path.abspath(target_folder)
+                abs_output = os.path.abspath(self.output_dir)
+                if not abs_target.startswith(abs_output):
+                    raise PermissionError(f"安全校验失败：目标路径试图跳出根保存目录 ({abs_target})")
+                    
                 os.makedirs(target_folder, exist_ok=True)
 
                 # 3. 移动并重命名视频文件
@@ -86,6 +93,11 @@ class ScrapeWorker(QRunnable):
                 target_video_name = f"{self.code}{cd_suffix}{ext}"
                 target_video_path = os.path.join(target_folder, target_video_name)
 
+                # 安全验证：确保视频写入绝对路径前缀被限制在 output_dir 下
+                abs_video = os.path.abspath(target_video_path)
+                if not abs_video.startswith(abs_output):
+                    raise PermissionError(f"安全校验失败：视频写路径试图跳出根保存目录 ({abs_video})")
+
                 # 如果源文件和目标文件不同，则进行移动
                 if os.path.exists(self.file_path) and os.path.abspath(self.file_path) != os.path.abspath(target_video_path):
                     shutil.move(self.file_path, target_video_path)
@@ -93,6 +105,11 @@ class ScrapeWorker(QRunnable):
                 # 4. 写入元数据 NFO
                 self.signals.progress.emit(self.file_path, "正在生成元数据 NFO...")
                 nfo_path = os.path.join(target_folder, f"{self.code}.nfo")
+                
+                # 安全验证：确保 NFO 写入绝对路径前缀被限制在 output_dir 下
+                abs_nfo = os.path.abspath(nfo_path)
+                if not abs_nfo.startswith(abs_output):
+                    raise PermissionError(f"安全校验失败：NFO 写路径试图跳出根保存目录 ({abs_nfo})")
                 
                 nfo_data = {
                     "code": self.code,

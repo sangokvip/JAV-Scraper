@@ -506,8 +506,10 @@ class Controller:
             cover_url = detail.get("cover_url")
             if cover_url:
                 try:
-                    proxy = self.view.proxy_input.text().strip()
-                    proxies = {"http": proxy, "https": proxy} if proxy else None
+                    proxies = None
+                    if self.view.chk_custom_proxy.isChecked():
+                        proxy = self.view.proxy_input.text().strip()
+                        proxies = {"http": proxy, "https": proxy} if proxy else None
                     r = requests.get(cover_url, timeout=8, proxies=proxies)
                     if r.status_code == 200:
                         pixmap = QPixmap()
@@ -557,8 +559,10 @@ class Controller:
             # 网络异步加载剧照
             thumbnails = detail.get("thumbnail_images", [])
             if thumbnails:
-                proxy = self.view.proxy_input.text().strip()
-                proxies = {"http": proxy, "https": proxy} if proxy else None
+                proxies = None
+                if self.view.chk_custom_proxy.isChecked():
+                    proxy = self.view.proxy_input.text().strip()
+                    proxies = {"http": proxy, "https": proxy} if proxy else None
                 # 跳过第一个封面图
                 urls_to_load = thumbnails[1:] if len(thumbnails) > 1 else thumbnails
                 for url in urls_to_load:

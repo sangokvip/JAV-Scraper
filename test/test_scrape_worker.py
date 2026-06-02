@@ -38,6 +38,8 @@ def test_scrape_worker_normal_path_filters_magnets():
         # 验证信号传递的数据中的 magnets 也为空
         args = worker.signals.preview_loaded.emit.call_args[0]
         assert args[1]["magnets"] == []
+        # 验证 finished_worker 信号被无条件发射并传递 self
+        worker.signals.finished_worker.emit.assert_called_once_with(worker)
 
 
 def test_scrape_worker_virtual_path_keeps_magnets():
@@ -75,3 +77,5 @@ def test_scrape_worker_virtual_path_keeps_magnets():
         # 验证信号中的 magnets 保留
         args = worker.signals.preview_loaded.emit.call_args[0]
         assert len(args[1]["magnets"]) == 2
+        # 验证 finished_worker 被发射
+        worker.signals.finished_worker.emit.assert_called_once_with(worker)

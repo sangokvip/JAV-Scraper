@@ -386,14 +386,16 @@ class MainWindow(QMainWindow):
             #OrganizeBtn {
                 background-color: #FF5924;
                 color: #FFFFFF;
-                border: none;
+                border: 1px solid #FF5924;
                 border-radius: 20px;
             }
             #OrganizeBtn:hover {
                 background-color: #FF8550;
+                border-color: #FF8550;
             }
             #OrganizeBtn:pressed {
                 background-color: #E04414;
+                border-color: #E04414;
                 padding-top: 9px;
                 padding-bottom: 7px;
             }
@@ -429,7 +431,7 @@ class MainWindow(QMainWindow):
             #CopyMagnetBtn {
                 background-color: #FF5924;
                 color: #FFFFFF;
-                border: none;
+                border: 1px solid #FF5924;
                 border-radius: 12px;
                 padding: 3px 8px;
                 font-size: 11px;
@@ -437,9 +439,11 @@ class MainWindow(QMainWindow):
             }
             #CopyMagnetBtn:hover {
                 background-color: #FF8550;
+                border-color: #FF8550;
             }
             #CopyMagnetBtn:pressed {
                 background-color: #E04414;
+                border-color: #E04414;
             }
             #RemoveSelectedBtn {
                 background-color: transparent;

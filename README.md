@@ -93,12 +93,7 @@ python3 main.py
 python3 -m pytest -v
 ```
 
-### 测试矩阵说明
-* `test_code_extractor.py`：高普适性番号洗净清洗提取测试，覆盖中文字幕 `CESD194C` -> `CESD-194` 的验证。
-* `test_task_persister.py`：设置、Cookie 以及任务队列的本地 JSON 加密/明文秒级容灾载入持久化测试。
-* `test_path_safety.py`：安全校验测试，完美拦截路径穿越穿越出保存目录的黑客行径。
-* `test_crash_prevention.py`：后台并发图片加载与 GC 主线程安全跨线程析构回收（SIGSEGV 段错误完美防护）测试。
-* `test_folder_cleaner.py`：归档完成后对原空父目录物理安全删除及系统敏感白名单目录保护测试。
+
 
 ---
 

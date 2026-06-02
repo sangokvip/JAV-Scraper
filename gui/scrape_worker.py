@@ -12,13 +12,15 @@ class WorkerSignals(QObject):
     progress = Signal(str, str)     # filepath, current action description
 
 class ScrapeWorker(QRunnable):
-    def __init__(self, file_path: str, code: str, output_dir: str, platform: str, proxies: dict = None):
+    def __init__(self, file_path: str, code: str, output_dir: str, platform: str, proxies: dict = None, only_scrape: bool = False, cached_detail: dict = None):
         super().__init__()
         self.file_path = file_path
         self.code = code
         self.output_dir = output_dir
         self.platform = platform
         self.proxies = proxies
+        self.only_scrape = only_scrape
+        self.cached_detail = cached_detail
         self.signals = WorkerSignals()
 
     def run(self):
@@ -28,19 +30,23 @@ class ScrapeWorker(QRunnable):
                 self.signals.finished.emit(self.file_path, "未识别出番号，请双击补充。")
                 return
 
-            self.signals.progress.emit(self.file_path, "正在初始化刮削器...")
-            
-            # 清除旧的单例缓存，保证最新的代理/Cookie配置生效
-            AdapterFactory.clear_instance()
-            
-            if self.platform == "javdb":
-                adapter = AdapterFactory.get_adapter_by_name("javdb", proxies=self.proxies)
-                detail = adapter.get_video_by_code(self.code)
+            if self.cached_detail:
+                detail = self.cached_detail
+                self.signals.progress.emit(self.file_path, "使用已缓存的刮削数据...")
             else:
-                proxy_str = self.proxies.get("http") if self.proxies else None
-                adapter = AdapterFactory.get_adapter_by_name("javbus", proxy=proxy_str)
-                # JavBus 使用 get_video_detail (用番号直接作为ID)
-                detail = adapter.get_video_detail(self.code)
+                self.signals.progress.emit(self.file_path, "正在从平台刮削数据...")
+                
+                # 清除旧的单例缓存，保证最新的代理/Cookie配置生效
+                AdapterFactory.clear_instance()
+                
+                if self.platform == "javdb":
+                    adapter = AdapterFactory.get_adapter_by_name("javdb", proxies=self.proxies)
+                    detail = adapter.get_video_by_code(self.code)
+                else:
+                    proxy_str = self.proxies.get("http") if self.proxies else None
+                    adapter = AdapterFactory.get_adapter_by_name("javbus", proxy=proxy_str)
+                    # JavBus 使用 get_video_detail (用番号直接作为ID)
+                    detail = adapter.get_video_detail(self.code)
 
             if not detail:
                 self.signals.finished.emit(self.file_path, f"在平台中找不到番号: {self.code}")
@@ -48,6 +54,10 @@ class ScrapeWorker(QRunnable):
 
             # 发送预览加载信号，供主界面渲染详情卡片
             self.signals.preview_loaded.emit(self.file_path, detail)
+
+            if self.only_scrape:
+                self.signals.finished.emit(self.file_path, "scrape_success")
+                return
 
             # 2. 文件夹创建与非法字符处理
             clean_title = detail.get("title", "")

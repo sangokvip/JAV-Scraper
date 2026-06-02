@@ -1,11 +1,54 @@
 import os
+import json
 import requests
-from PySide6.QtCore import QThreadPool, Qt
-from PySide6.QtWidgets import QTableWidgetItem, QMessageBox, QFileDialog
+from PySide6.QtCore import QThreadPool, Qt, Signal, QRunnable, QObject
+from PySide6.QtWidgets import QTableWidgetItem, QMessageBox, QFileDialog, QDialog, QVBoxLayout, QLabel, QTextEdit
 from PySide6.QtGui import QPixmap
 from gui.main_window import MainWindow
 from gui.scrape_worker import ScrapeWorker
 from lib.code_extractor import extract_code
+
+class PhotoDialog(QDialog):
+    def __init__(self, pixmap, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("剧照放大预览")
+        self.setWindowFlags(Qt.WindowType.WindowCloseButtonHint)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        lbl = QLabel()
+        # 放大为最大 800x600
+        lbl.setPixmap(pixmap.scaled(800, 600, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        layout.addWidget(lbl)
+        self.setLayout(layout)
+
+class ClickableLabel(QLabel):
+    double_clicked = Signal(QPixmap)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pixmap_data = None
+
+    def mouseDoubleClickEvent(self, event):
+        if self.pixmap_data:
+            self.double_clicked.emit(self.pixmap_data)
+
+class ImageLoadSignals(QObject):
+    loaded = Signal(str, str, bytes)  # filepath, url, content
+
+class ImageLoadWorker(QRunnable):
+    def __init__(self, filepath, url, proxies=None):
+        super().__init__()
+        self.filepath = filepath
+        self.url = url
+        self.proxies = proxies
+        self.signals = ImageLoadSignals()
+
+    def run(self):
+        try:
+            r = requests.get(self.url, timeout=10, proxies=self.proxies)
+            if r.status_code == 200:
+                self.signals.loaded.emit(self.filepath, self.url, r.content)
+        except Exception as e:
+            pass
 
 class Controller:
     def __init__(self, view: MainWindow):
@@ -16,6 +59,7 @@ class Controller:
         
         # 存储所有正在排队或执行的任务文件：{file_path: {"code": str, "row": int, "detail": dict, "status": str}}
         self.task_files = {}
+        self.current_preview_filepath = None
 
         # 默认保存路径为项目根目录下的 output 文件夹
         default_out = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "output"))
@@ -25,7 +69,11 @@ class Controller:
         self.view.files_dropped.connect(self.handle_files_dropped)
         self.view.btn_browse.clicked.connect(self.browse_output_dir)
         self.view.btn_clear.clicked.connect(self.clear_all_tasks)
+        self.view.btn_import_files.clicked.connect(lambda: self.import_files_manually())
+        self.view.btn_import_dir.clicked.connect(lambda: self.import_dir_manually())
+        self.view.btn_add_code.clicked.connect(lambda: self.add_code_manually())
         self.view.btn_start.clicked.connect(self.start_scraping)
+        self.view.btn_organize.clicked.connect(self.start_organizing)
         self.view.btn_test_proxy.clicked.connect(self.test_proxy_connection)
         self.view.table.itemSelectionChanged.connect(self.handle_selection_changed)
         self.view.table.itemChanged.connect(self.handle_cell_changed)
@@ -83,6 +131,57 @@ class Controller:
                 "status": status_text
             }
 
+    def import_files_manually(self):
+        video_filters = "视频文件 (*.mp4 *.mkv *.avi *.wmv *.mov *.flv *.rmvb)"
+        files, _ = QFileDialog.getOpenFileNames(self.view, "选择视频文件", "", video_filters)
+        if files:
+            self.handle_files_dropped(files)
+
+    def import_dir_manually(self):
+        dir_path = QFileDialog.getExistingDirectory(self.view, "选择视频文件夹")
+        if dir_path:
+            self.handle_files_dropped([dir_path])
+
+    def add_code_manually(self):
+        from PySide6.QtWidgets import QInputDialog
+        code, ok = QInputDialog.getText(self.view, "手动添加番号", "请输入要刮削的视频番号 (例如 IPX-123):")
+        if ok and code.strip():
+            code = code.strip().upper()
+            virtual_path = f"__virtual__:{code}"
+            
+            if virtual_path in self.task_files:
+                QMessageBox.warning(self.view, "提示", f"番号 {code} 已经存在于任务列表中")
+                return
+                
+            row = self.view.table.rowCount()
+            self.view.table.insertRow(row)
+            
+            # ID 列
+            id_item = QTableWidgetItem(f"{row + 1:02d}")
+            id_item.setFlags(id_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.view.table.setItem(row, 0, id_item)
+            
+            # 原文件名
+            name_item = QTableWidgetItem("[无本地视频: 仅刮削元数据]")
+            name_item.setFlags(name_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.view.table.setItem(row, 1, name_item)
+            
+            # 番号 (可编辑)
+            code_item = QTableWidgetItem(code)
+            self.view.table.setItem(row, 2, code_item)
+            
+            # 当前状态
+            status_item = QTableWidgetItem("排队中")
+            status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.view.table.setItem(row, 3, status_item)
+            
+            self.task_files[virtual_path] = {
+                "code": code,
+                "row": row,
+                "detail": None,
+                "status": "排队中"
+            }
+
     def handle_cell_changed(self, item):
         # 当用户在表格中双击编辑修改番号时触发
         if item.column() == 2:
@@ -113,6 +212,15 @@ class Controller:
         self.view.lbl_cover.setPixmap(QPixmap())
         self.view.lbl_info_title.setText("影片番号与标题")
         self.view.lbl_info_details.setText("制片商: -\n发行日期: -\n演员: -")
+        self.view.txt_magnet.setText("")
+        
+        # 清空剧照 samples_layout
+        if hasattr(self.view, "samples_layout"):
+            while self.view.samples_layout.count():
+                item = self.view.samples_layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
 
     def test_proxy_connection(self):
         proxy = self.view.proxy_input.text().strip()
@@ -198,7 +306,7 @@ class Controller:
         active_tasks = 0
         for file_path, info in self.task_files.items():
             code = info["code"]
-            if not code or info["status"] in ["正在刮削...", "刮削成功"]:
+            if not code or info["status"] in ["正在刮削...", "已刮削(未整理)", "整理中...", "已整理成功"]:
                 continue
 
             active_tasks += 1
@@ -206,8 +314,8 @@ class Controller:
             row = info["row"]
             self.view.table.setItem(row, 3, QTableWidgetItem("正在刮削..."))
 
-            # 启动多线程任务
-            worker = ScrapeWorker(file_path, code, output_dir, platform, proxies)
+            # 仅执行刮削预览
+            worker = ScrapeWorker(file_path, code, output_dir, platform, proxies, only_scrape=True)
             worker.signals.started.connect(self.on_worker_started)
             worker.signals.progress.connect(self.on_worker_progress)
             worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
@@ -216,7 +324,40 @@ class Controller:
             self.thread_pool.start(worker)
 
         if active_tasks == 0:
-            QMessageBox.information(self.view, "提示", "列表中没有排队中的可刮削影片")
+            QMessageBox.information(self.view, "提示", "列表中没有需要刮削的影片")
+
+    def start_organizing(self):
+        output_dir = self.view.path_input.text().strip()
+        if not output_dir:
+            QMessageBox.warning(self.view, "警告", "请先选择目标保存路径！")
+            return
+
+        proxy = self.view.proxy_input.text().strip()
+        proxies = {"http": proxy, "https": proxy} if proxy else None
+        platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
+
+        active_tasks = 0
+        for file_path, info in self.task_files.items():
+            code = info["code"]
+            if not code or info["status"] in ["整理中...", "已整理成功"]:
+                continue
+
+            active_tasks += 1
+            info["status"] = "整理中..."
+            row = info["row"]
+            self.view.table.setItem(row, 3, QTableWidgetItem("整理中..."))
+
+            # 执行整理落盘。如果已经缓存有元数据，直接传入 detail 免去重复请求
+            worker = ScrapeWorker(file_path, code, output_dir, platform, proxies, only_scrape=False, cached_detail=info["detail"])
+            worker.signals.started.connect(self.on_worker_started)
+            worker.signals.progress.connect(self.on_worker_progress)
+            worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
+            worker.signals.finished.connect(self.on_worker_finished)
+
+            self.thread_pool.start(worker)
+
+        if active_tasks == 0:
+            QMessageBox.information(self.view, "提示", "列表中没有可整理落盘的影片")
 
     # ================== 后台线程信号槽 ==================
     def on_worker_started(self, filepath):
@@ -247,14 +388,23 @@ class Controller:
         if filepath in self.task_files:
             info = self.task_files[filepath]
             if status == "success":
-                info["status"] = "刮削成功"
-                self.view.table.setItem(info["row"], 3, QTableWidgetItem("刮削成功"))
+                info["status"] = "已整理成功"
+                self.view.table.setItem(info["row"], 3, QTableWidgetItem("已整理成功"))
                 
-                # 如果成功，且当前选中该行，尝试加载本地已下载的海报 poster.jpg 进行展示
+                # 如果成功，且当前选中该行，加载本地已下载的海报和剧照展示
                 selected_ranges = self.view.table.selectedRanges()
                 if selected_ranges and selected_ranges[0].topRow() == info["row"]:
                     detail = info["detail"]
                     self.show_preview_details(detail, filepath, loaded_local=True)
+            elif status == "scrape_success":
+                info["status"] = "已刮削(未整理)"
+                self.view.table.setItem(info["row"], 3, QTableWidgetItem("已刮削(未整理)"))
+                
+                # 如果成功，且当前选中该行，展示网络刮削详情预览
+                selected_ranges = self.view.table.selectedRanges()
+                if selected_ranges and selected_ranges[0].topRow() == info["row"]:
+                    detail = info["detail"]
+                    self.show_preview_details(detail, filepath, loaded_local=False)
             else:
                 info["status"] = f"失败: {status}"
                 self.view.table.setItem(info["row"], 3, QTableWidgetItem(f"失败: {status}"))
@@ -281,7 +431,7 @@ class Controller:
         detail = info["detail"]
         if detail:
             # 判断是否已经刮削成功并下载好本地图片
-            is_success = info["status"] == "刮削成功"
+            is_success = info["status"] == "已整理成功"
             self.show_preview_details(detail, filepath, loaded_local=is_success)
         else:
             # 未刮削或刮削中，仅显示基础文件名信息
@@ -290,6 +440,7 @@ class Controller:
             self.view.lbl_info_details.setText(f"当前状态: {info['status']}\n完整路径: {filepath}")
 
     def show_preview_details(self, detail: dict, filepath: str, loaded_local: bool = False):
+        self.current_preview_filepath = filepath
         code = detail.get("code", "")
         title = detail.get("title", "")
         self.view.lbl_info_title.setText(f"[{code}]\n{title}")
@@ -307,9 +458,20 @@ class Controller:
         )
         self.view.lbl_info_details.setText(info_details_text)
 
+        # 渲染磁力链接
+        magnets = detail.get("magnets", [])
+        if magnets:
+            magnet_lines = []
+            for mag in magnets:
+                size_str = mag.get("size_text") or (f"{mag.get('size_mb', 0):.2f}MB" if mag.get('size_mb') else "未知大小")
+                magnet_lines.append(f"[{size_str}] {mag.get('magnet', '')}")
+            self.view.txt_magnet.setText("\n".join(magnet_lines))
+        else:
+            self.view.txt_magnet.setText("未获取到磁力链接")
+
         # 渲染海报图片
+        poster_loaded = False
         if loaded_local:
-            # 刮削成功，大图已落盘在 [番号] 标题/poster.jpg
             output_dir = self.view.path_input.text().strip()
             clean_title = detail.get("title", "")
             for char in r'\/:*?"<>|':
@@ -319,31 +481,91 @@ class Controller:
             
             if os.path.exists(local_poster_path):
                 pixmap = QPixmap(local_poster_path)
-                # 等比例缩放海报
-                scaled_pixmap = pixmap.scaled(self.view.lbl_cover.width(), self.view.lbl_cover.height(),
-                                              Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                self.view.lbl_cover.setPixmap(scaled_pixmap)
-                return
-
-        # 刮削中/未完成时直接使用网络地址预览
-        cover_url = detail.get("cover_url")
-        if cover_url:
-            # 主线程异步下载以防卡死
-            import urllib.request
-            try:
-                # 注意：网络拉取如果直接在主线程会略有卡顿，但用于单张预览可接受。也可以直接通过代理加载
-                proxy = self.view.proxy_input.text().strip()
-                proxies = {"http": proxy, "https": proxy} if proxy else None
-                
-                # 为保证极佳体验，我们通过 requests 快速获取
-                r = requests.get(cover_url, timeout=5, proxies=proxies)
-                if r.status_code == 200:
-                    pixmap = QPixmap()
-                    pixmap.loadFromData(r.content)
+                if not pixmap.isNull():
                     scaled_pixmap = pixmap.scaled(self.view.lbl_cover.width(), self.view.lbl_cover.height(),
                                                   Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                     self.view.lbl_cover.setPixmap(scaled_pixmap)
-            except Exception as img_err:
-                self.view.lbl_cover.setText(f"封面加载失败\n{img_err}")
+                    poster_loaded = True
+
+        if not poster_loaded:
+            # 刮削中/未完成时直接使用网络地址预览海报
+            cover_url = detail.get("cover_url")
+            if cover_url:
+                try:
+                    proxy = self.view.proxy_input.text().strip()
+                    proxies = {"http": proxy, "https": proxy} if proxy else None
+                    r = requests.get(cover_url, timeout=8, proxies=proxies)
+                    if r.status_code == 200:
+                        pixmap = QPixmap()
+                        pixmap.loadFromData(r.content)
+                        scaled_pixmap = pixmap.scaled(self.view.lbl_cover.width(), self.view.lbl_cover.height(),
+                                                      Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                        self.view.lbl_cover.setPixmap(scaled_pixmap)
+                        poster_loaded = True
+                except Exception as img_err:
+                    self.view.lbl_cover.setText(f"封面加载失败\n{img_err}")
+            
+            if not poster_loaded:
+                self.view.lbl_cover.setText("暂无封面")
+
+        # 清空剧照 samples_layout
+        if hasattr(self.view, "samples_layout"):
+            while self.view.samples_layout.count():
+                item = self.view.samples_layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
+
+        # 渲染剧照样品预览
+        if loaded_local:
+            output_dir = self.view.path_input.text().strip()
+            clean_title = detail.get("title", "")
+            for char in r'\/:*?"<>|':
+                clean_title = clean_title.replace(char, " ")
+            folder_name = f"[{code}] {clean_title}"[:120].strip()
+            local_folder = os.path.join(output_dir, folder_name)
+            local_extrafanart_dir = os.path.join(local_folder, "extrafanart")
+            
+            if os.path.exists(local_extrafanart_dir):
+                for file_name in sorted(os.listdir(local_extrafanart_dir)):
+                    if file_name.lower().endswith(('.jpg', '.jpeg', '.png')):
+                        full_img_path = os.path.join(local_extrafanart_dir, file_name)
+                        lbl = ClickableLabel()
+                        lbl.setCursor(Qt.CursorShape.PointingHandCursor)
+                        pix = QPixmap(full_img_path)
+                        if not pix.isNull():
+                            scaled_pix = pix.scaledToHeight(90, Qt.TransformationMode.SmoothTransformation)
+                            lbl.setPixmap(scaled_pix)
+                            lbl.pixmap_data = pix
+                            lbl.double_clicked.connect(self.show_zoomed_image)
+                            self.view.samples_layout.addWidget(lbl)
         else:
-            self.view.lbl_cover.setText("暂无封面")
+            # 网络异步加载剧照
+            thumbnails = detail.get("thumbnail_images", [])
+            if thumbnails:
+                proxy = self.view.proxy_input.text().strip()
+                proxies = {"http": proxy, "https": proxy} if proxy else None
+                # 跳过第一个封面图
+                urls_to_load = thumbnails[1:] if len(thumbnails) > 1 else thumbnails
+                for url in urls_to_load:
+                    worker = ImageLoadWorker(filepath, url, proxies)
+                    worker.signals.loaded.connect(self.on_network_image_loaded)
+                    self.thread_pool.start(worker)
+
+    def on_network_image_loaded(self, filepath, url, data):
+        # 确保只有当前正在预览的视频才显示剧照，防错乱
+        if self.current_preview_filepath == filepath:
+            pix = QPixmap()
+            pix.loadFromData(data)
+            if not pix.isNull():
+                lbl = ClickableLabel()
+                lbl.setCursor(Qt.CursorShape.PointingHandCursor)
+                scaled_pix = pix.scaledToHeight(90, Qt.TransformationMode.SmoothTransformation)
+                lbl.setPixmap(scaled_pix)
+                lbl.pixmap_data = pix
+                lbl.double_clicked.connect(self.show_zoomed_image)
+                self.view.samples_layout.addWidget(lbl)
+
+    def show_zoomed_image(self, pixmap):
+        dialog = PhotoDialog(pixmap, self.view)
+        dialog.exec()

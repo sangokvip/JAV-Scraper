@@ -103,15 +103,37 @@ class MainWindow(QMainWindow):
         self.table.setColumnWidth(3, 150)
         center_layout.addWidget(self.table)
 
-        # 操作按钮
-        btn_layout = QHBoxLayout()
+        # 操作按钮控制栏
+        btn_control_layout = QVBoxLayout()
+        btn_control_layout.setSpacing(6)
+
+        # 按钮行 1：导入与清空
+        btn_row1_layout = QHBoxLayout()
         self.btn_clear = QPushButton("一键清空")
         self.btn_clear.setObjectName("ClearBtn")
-        self.btn_start = QPushButton("开始刮削并整理")
+        self.btn_import_files = QPushButton("导入视频文件...")
+        self.btn_import_files.setObjectName("ImportFilesBtn")
+        self.btn_import_dir = QPushButton("导入文件夹...")
+        self.btn_import_dir.setObjectName("ImportDirBtn")
+        self.btn_add_code = QPushButton("手动输入番号...")
+        self.btn_add_code.setObjectName("AddCodeBtn")
+        btn_row1_layout.addWidget(self.btn_clear)
+        btn_row1_layout.addWidget(self.btn_import_files)
+        btn_row1_layout.addWidget(self.btn_import_dir)
+        btn_row1_layout.addWidget(self.btn_add_code)
+        btn_control_layout.addLayout(btn_row1_layout)
+
+        # 按钮行 2：仅刮削与整理动作
+        btn_row2_layout = QHBoxLayout()
+        self.btn_start = QPushButton("仅执行刮削预览")
         self.btn_start.setObjectName("StartBtn")
-        btn_layout.addWidget(self.btn_clear)
-        btn_layout.addWidget(self.btn_start)
-        center_layout.addLayout(btn_layout)
+        self.btn_organize = QPushButton("执行整理落盘")
+        self.btn_organize.setObjectName("OrganizeBtn")
+        btn_row2_layout.addWidget(self.btn_start)
+        btn_row2_layout.addWidget(self.btn_organize)
+        btn_control_layout.addLayout(btn_row2_layout)
+
+        center_layout.addLayout(btn_control_layout)
 
         main_layout.addWidget(center_panel, stretch=1)
 
@@ -138,6 +160,38 @@ class MainWindow(QMainWindow):
         self.lbl_info_details.setObjectName("InfoDetails")
         self.lbl_info_details.setWordWrap(True)
         right_layout.addWidget(self.lbl_info_details)
+
+        # 剧照横向滚动区域
+        self.lbl_samples_title = QLabel("影片预览剧照 (双击放大):")
+        self.lbl_samples_title.setObjectName("SamplesTitle")
+        right_layout.addWidget(self.lbl_samples_title)
+
+        from PySide6.QtWidgets import QScrollArea
+        self.samples_scroll = QScrollArea()
+        self.samples_scroll.setObjectName("SamplesScroll")
+        self.samples_scroll.setWidgetResizable(True)
+        self.samples_scroll.setFixedHeight(110)
+        self.samples_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.samples_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        self.samples_widget = QWidget()
+        self.samples_layout = QHBoxLayout(self.samples_widget)
+        self.samples_layout.setContentsMargins(5, 2, 5, 2)
+        self.samples_layout.setSpacing(8)
+        self.samples_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.samples_scroll.setWidget(self.samples_widget)
+        right_layout.addWidget(self.samples_scroll)
+
+        # 磁力链接展示区域
+        self.lbl_magnet_title = QLabel("磁力链接 (可直接复制):")
+        self.lbl_magnet_title.setObjectName("MagnetTitle")
+        right_layout.addWidget(self.lbl_magnet_title)
+
+        self.txt_magnet = QTextEdit()
+        self.txt_magnet.setObjectName("MagnetText")
+        self.txt_magnet.setReadOnly(True)
+        self.txt_magnet.setFixedHeight(80)
+        right_layout.addWidget(self.txt_magnet)
 
         right_layout.addStretch()
         main_layout.addWidget(right_panel)
@@ -186,12 +240,53 @@ class MainWindow(QMainWindow):
                 border-color: #D4AF37;
             }
             #StartBtn {
+                background-color: #2E2E2E;
+                border: 1px solid #D4AF37;
+                color: #D4AF37;
+            }
+            #StartBtn:hover {
+                background-color: #3E3E3E;
+                color: #E5C158;
+            }
+            #AddCodeBtn {
+                background-color: #2E2E2E;
+                border: 1px solid #444444;
+                color: #F5F5F7;
+            }
+            #AddCodeBtn:hover {
+                background-color: #3E3E3E;
+                border-color: #D4AF37;
+            }
+            #OrganizeBtn {
                 background-color: #D4AF37;
                 color: #121212;
                 border: none;
             }
-            #StartBtn:hover {
+            #OrganizeBtn:hover {
                 background-color: #E5C158;
+            }
+            #SamplesScroll {
+                background-color: #2A2A2A;
+                border: 1px solid #3A3A3A;
+                border-radius: 6px;
+            }
+            #SamplesTitle {
+                color: #D4AF37;
+                font-size: 12px;
+                margin-top: 5px;
+            }
+            #MagnetTitle {
+                color: #D4AF37;
+                font-size: 12px;
+                margin-top: 5px;
+            }
+            #MagnetText {
+                background-color: #2A2A2A;
+                border: 1px solid #3A3A3A;
+                border-radius: 6px;
+                color: #8E8E93;
+                font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+                font-size: 11px;
             }
             #DropZone {
                 border: 2px dashed #444444;

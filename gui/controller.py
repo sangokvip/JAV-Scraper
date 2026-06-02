@@ -154,6 +154,7 @@ class ClickableLabel(QLabel):
 
 class ImageLoadSignals(QObject):
     loaded = Signal(str, str, bytes)  # filepath, url, content
+    finished_worker = Signal(object)  # worker object
 
 class ImageLoadWorker(QRunnable):
     def __init__(self, filepath, url, proxies=None):
@@ -165,11 +166,14 @@ class ImageLoadWorker(QRunnable):
 
     def run(self):
         try:
-            r = requests.get(self.url, timeout=10, proxies=self.proxies)
-            if r.status_code == 200:
-                self.signals.loaded.emit(self.filepath, self.url, r.content)
-        except Exception as e:
-            pass
+            try:
+                r = requests.get(self.url, timeout=10, proxies=self.proxies)
+                if r.status_code == 200:
+                    self.signals.loaded.emit(self.filepath, self.url, r.content)
+            except Exception as e:
+                pass
+        finally:
+            self.signals.finished_worker.emit(self)
 
 class Controller:
     def __init__(self, view: MainWindow):

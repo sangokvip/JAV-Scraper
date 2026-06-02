@@ -48,18 +48,13 @@ class MainWindow(QMainWindow):
         left_layout.setContentsMargins(12, 12, 12, 12)
         left_layout.setSpacing(10)
 
-        # 首选源
-        left_layout.addWidget(QLabel("首选刮削源:"))
+        # 首选源（隐藏在内存中，不加到布局里以确保后端 radio_javdb.isChecked() 兼容性）
         self.source_group = QButtonGroup(self)
         self.radio_javdb = QRadioButton("JAVDB")
         self.radio_javdb.setChecked(True)
         self.radio_javbus = QRadioButton("JAVBUS")
         self.source_group.addButton(self.radio_javdb)
         self.source_group.addButton(self.radio_javbus)
-        source_layout = QHBoxLayout()
-        source_layout.addWidget(self.radio_javdb)
-        source_layout.addWidget(self.radio_javbus)
-        left_layout.addLayout(source_layout)
 
         # 代理设置
         left_layout.addWidget(QLabel("代理设置 (SOCKS5/HTTP):"))

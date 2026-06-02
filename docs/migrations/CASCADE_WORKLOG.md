@@ -537,6 +537,17 @@
   - 破坏 API 地址进行测试，自动安全降级为网页解析且无阻断。
 - **回滚点**: `git reset --hard HEAD~1`
 
+### 52) Style & Refactor: 隐式退化并从 GUI 布局中移除“首选刮削源”单选栏，默认使用 JAVDB
+- **变更文件**: `gui/main_window.py`
+- **背景与目标**: 解决用户由于 JavBus 平台连接偶发不稳定、体验差，决定在 GUI 界面移除该平台选择单选栏并默认强制选用 JAVDB 进行刮削的需求。
+- **技术实施**:
+  - **移除单选栏布局挂载**：在 `gui/main_window.py` 中移除“首选刮削源”标签以及包含 `JAVDB/JAVBUS` 切换的单选按钮在 `left_layout` 中的添加步骤，使得此交互元件在界面上不予渲染。
+  - **维持内存变量以保持高兼容性**：保留内存中 `self.radio_javdb` 与 `self.radio_javbus` 的正常初始化与 `radio_javdb.setChecked(True)` 的默认设置，确保 `gui/controller.py` 中大量的 `platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"` 逻辑无需任何侵入式修改即可实现 100% 稳定运行并默认返回 JAVDB 平台决策。
+- **风险自查**:
+  - 界面上不再渲染“首选刮削源”一栏。
+  - 避免了修改 Controller 导致的重构崩坏风险，主逻辑依然可以安全通过。
+- **回滚点**: `git reset --hard HEAD~1`
+
 
 
 

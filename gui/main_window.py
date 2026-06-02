@@ -124,6 +124,7 @@ class MainWindow(QMainWindow):
         self.table.setColumnWidth(0, 40)
         self.table.setColumnWidth(2, 160)
         self.table.setColumnWidth(3, 150)
+        self.table.verticalHeader().setVisible(False)
         center_layout.addWidget(self.table)
 
         # 操作按钮控制栏
@@ -377,6 +378,26 @@ class MainWindow(QMainWindow):
             #InfoDetails {
                 color: #8E8E93;
                 line-height: 1.5;
+            }
+            QMessageBox, QDialog, QInputDialog {
+                background-color: #1E1E1E;
+            }
+            QMessageBox QLabel, QInputDialog QLabel {
+                color: #F5F5F7;
+                font-size: 13px;
+            }
+            QMessageBox QPushButton, QInputDialog QPushButton {
+                background-color: #2E2E2E;
+                border: 1px solid #444444;
+                color: #F5F5F7;
+                padding: 6px 12px;
+                font-weight: bold;
+                border-radius: 4px;
+                min-width: 65px;
+            }
+            QMessageBox QPushButton:hover, QInputDialog QPushButton:hover {
+                background-color: #3E3E3E;
+                border-color: #D4AF37;
             }
         """)
 

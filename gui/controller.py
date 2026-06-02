@@ -300,19 +300,45 @@ class Controller:
             QMessageBox.warning(self.view, "警告", "请先选择目标保存路径！")
             return
 
+        # 统计任务文件
+        todo_files = []
+        done_files = []
+        for fp, info in self.task_files.items():
+            if not info["code"]:
+                continue
+            if info["status"] in ["正在刮削...", "整理中..."]:
+                continue
+            if info["status"] in ["已刮削(未整理)", "已整理成功"]:
+                done_files.append(fp)
+            else:
+                todo_files.append(fp)
+
+        if not todo_files and not done_files:
+            QMessageBox.information(self.view, "提示", "列表中没有可以刮削的影片番号")
+            return
+
+        # 如果没有新任务但有已刮削任务，询问是否重新刮削
+        if not todo_files and done_files:
+            reply = QMessageBox.question(
+                self.view, "重新刮削提示",
+                "所选影片均已刮削过，是否要重新刮削？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                todo_files = done_files
+            else:
+                return
+
         proxies = None
         if self.view.chk_custom_proxy.isChecked():
             proxy = self.view.proxy_input.text().strip()
             proxies = {"http": proxy, "https": proxy} if proxy else None
         platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
 
-        active_tasks = 0
-        for file_path, info in self.task_files.items():
+        for file_path in todo_files:
+            info = self.task_files[file_path]
             code = info["code"]
-            if not code or info["status"] in ["正在刮削...", "已刮削(未整理)", "整理中...", "已整理成功"]:
-                continue
-
-            active_tasks += 1
             info["status"] = "正在刮削..."
             row = info["row"]
             self.view.table.setItem(row, 3, QTableWidgetItem("正在刮削..."))
@@ -326,14 +352,41 @@ class Controller:
 
             self.thread_pool.start(worker)
 
-        if active_tasks == 0:
-            QMessageBox.information(self.view, "提示", "列表中没有需要刮削的影片")
-
     def start_organizing(self):
         output_dir = self.view.path_input.text().strip()
         if not output_dir:
             QMessageBox.warning(self.view, "警告", "请先选择目标保存路径！")
             return
+
+        # 统计任务文件
+        todo_files = []
+        done_files = []
+        for fp, info in self.task_files.items():
+            if not info["code"]:
+                continue
+            if info["status"] == "整理中...":
+                continue
+            if info["status"] == "已整理成功":
+                done_files.append(fp)
+            else:
+                todo_files.append(fp)
+
+        if not todo_files and not done_files:
+            QMessageBox.information(self.view, "提示", "列表中没有有效的整理落盘任务")
+            return
+
+        # 如果没有未整理任务，但有已整理成功任务，询问是否重新整理
+        if not todo_files and done_files:
+            reply = QMessageBox.question(
+                self.view, "重新整理提示",
+                "所选影片均已整理成功，是否要重新整理？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                todo_files = done_files
+            else:
+                return
 
         proxies = None
         if self.view.chk_custom_proxy.isChecked():
@@ -341,13 +394,9 @@ class Controller:
             proxies = {"http": proxy, "https": proxy} if proxy else None
         platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
 
-        active_tasks = 0
-        for file_path, info in self.task_files.items():
+        for file_path in todo_files:
+            info = self.task_files[file_path]
             code = info["code"]
-            if not code or info["status"] in ["整理中...", "已整理成功"]:
-                continue
-
-            active_tasks += 1
             info["status"] = "整理中..."
             row = info["row"]
             self.view.table.setItem(row, 3, QTableWidgetItem("整理中..."))
@@ -360,9 +409,6 @@ class Controller:
             worker.signals.finished.connect(self.on_worker_finished)
 
             self.thread_pool.start(worker)
-
-        if active_tasks == 0:
-            QMessageBox.information(self.view, "提示", "列表中没有可整理落盘的影片")
 
     # ================== 后台线程信号槽 ==================
     def on_worker_started(self, filepath):

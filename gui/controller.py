@@ -2,7 +2,7 @@ import os
 import json
 import requests
 from PySide6.QtCore import QThreadPool, Qt, Signal, QRunnable, QObject
-from PySide6.QtWidgets import QTableWidgetItem, QMessageBox, QFileDialog, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QPushButton, QProgressBar, QWidget
+from PySide6.QtWidgets import QTableWidgetItem, QMessageBox, QFileDialog, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QPushButton, QProgressBar, QWidget, QMenu
 from PySide6.QtGui import QPixmap
 from gui.main_window import MainWindow
 from gui.scrape_worker import ScrapeWorker
@@ -221,6 +221,10 @@ class Controller:
         self.view.btn_remove_selected.clicked.connect(self.remove_selected_task)
         self.view.btn_retry_failed.clicked.connect(self.retry_failed_tasks)
         self.view.table.delete_pressed.connect(self.remove_selected_task)
+        
+        # 开启表格右键上下文菜单
+        self.view.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.view.table.customContextMenuRequested.connect(self.show_table_context_menu)
 
         # 自动加载已有的 Cookie 进行显示
         self.load_cookie_config()
@@ -563,6 +567,148 @@ class Controller:
                 self.reset_preview_panel()
             self.save_backup()
             self.view.update_empty_placeholder_visibility(len(self.task_files) == 0)
+
+    def show_table_context_menu(self, pos):
+        # 获取右键点击的单元格对应的行
+        item = self.view.table.itemAt(pos)
+        if not item:
+            return
+            
+        row = item.row()
+        # 选中整行
+        self.view.table.selectRow(row)
+        
+        # 根据行号找到对应的文件路径
+        target_fp = None
+        for fp, info in self.task_files.items():
+            if info["row"] == row:
+                target_fp = fp
+                break
+                
+        if not target_fp:
+            return
+            
+        info = self.task_files[target_fp]
+        
+        # 创建右键菜单
+        menu = QMenu(self.view)
+        
+        # 美化右键菜单样式（符合 Meadow 轻奢白金主题，白底、细边框、悬浮橙红高亮）
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #FFFFFF;
+                border: 1px solid #E5EAF2;
+                border-radius: 8px;
+                padding: 4px;
+            }
+            QMenu::item {
+                background-color: transparent;
+                padding: 6px 20px;
+                color: #1A1C2E;
+                font-size: 12px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: rgba(255, 89, 36, 0.08);
+                color: #FF5924;
+            }
+            QMenu::item:disabled {
+                color: #C0C4CC;
+            }
+        """)
+        
+        action_scrape = menu.addAction("仅刮削此影片")
+        action_organize = menu.addAction("仅整理此影片")
+        menu.addSeparator()
+        action_remove = menu.addAction("从列表中移除")
+        
+        # 如果没有输入番号，置灰刮削和整理
+        if not info["code"]:
+            action_scrape.setEnabled(False)
+            action_organize.setEnabled(False)
+            
+        # 如果正在进行中，置灰
+        if info["status"] in ["正在刮削...", "整理中..."]:
+            action_scrape.setEnabled(False)
+            action_organize.setEnabled(False)
+            
+        # 弹出菜单并阻塞等待选择
+        global_pos = self.view.table.viewport().mapToGlobal(pos)
+        selected_action = menu.exec(global_pos)
+        
+        if selected_action == action_scrape:
+            self.scrape_single_task(target_fp)
+        elif selected_action == action_organize:
+            self.organize_single_task(target_fp)
+        elif selected_action == action_remove:
+            self.remove_selected_task()
+
+    def scrape_single_task(self, file_path):
+        output_dir = self.view.path_input.text().strip()
+        if not output_dir:
+            QMessageBox.warning(self.view, "警告", "请先选择目标保存路径！")
+            return
+            
+        info = self.task_files.get(file_path)
+        if not info or not info["code"]:
+            return
+            
+        proxies = None
+        if self.view.chk_custom_proxy.isChecked():
+            proxy = self.view.proxy_input.text().strip()
+            proxies = {"http": proxy, "https": proxy} if proxy else None
+        platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
+        
+        code = info["code"]
+        info["status"] = "正在刮削..."
+        row = info["row"]
+        self.view.table.setItem(row, 3, QTableWidgetItem("正在刮削..."))
+        
+        worker = ScrapeWorker(file_path, code, output_dir, platform, proxies, only_scrape=True)
+        worker.setAutoDelete(False)
+        worker.signals.started.connect(self.on_worker_started)
+        worker.signals.progress.connect(self.on_worker_progress)
+        worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
+        worker.signals.finished.connect(self.on_worker_finished)
+        worker.signals.finished_worker.connect(self.on_worker_destroyed)
+        
+        self.active_workers.add(worker)
+        self.scrape_pool.start(worker)
+        self.save_backup()
+
+    def organize_single_task(self, file_path):
+        output_dir = self.view.path_input.text().strip()
+        if not output_dir:
+            QMessageBox.warning(self.view, "警告", "请先选择目标保存路径！")
+            return
+            
+        info = self.task_files.get(file_path)
+        if not info or not info["code"]:
+            return
+            
+        proxies = None
+        if self.view.chk_custom_proxy.isChecked():
+            proxy = self.view.proxy_input.text().strip()
+            proxies = {"http": proxy, "https": proxy} if proxy else None
+        platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
+        
+        code = info["code"]
+        info["status"] = "整理中..."
+        row = info["row"]
+        self.view.table.setItem(row, 3, QTableWidgetItem("整理中..."))
+        
+        # 已经刮削过的话，直接传入 info["detail"] 作为缓存，免去网络请求
+        worker = ScrapeWorker(file_path, code, output_dir, platform, proxies, only_scrape=False, cached_detail=info["detail"])
+        worker.setAutoDelete(False)
+        worker.signals.started.connect(self.on_worker_started)
+        worker.signals.progress.connect(self.on_worker_progress)
+        worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
+        worker.signals.finished.connect(self.on_worker_finished)
+        worker.signals.finished_worker.connect(self.on_worker_destroyed)
+        
+        self.active_workers.add(worker)
+        self.scrape_pool.start(worker)
+        self.save_backup()
 
     def reset_preview_panel(self):
         self.view.lbl_cover.setText("选择影片以预览海报")

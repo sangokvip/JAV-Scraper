@@ -1109,6 +1109,25 @@ class Controller:
             # 复制操作按钮 (第2列)
             btn_copy = QPushButton("复制")
             btn_copy.setObjectName("CopyMagnetBtn")
+            btn_copy.setStyleSheet("""
+                QPushButton {
+                    background-color: #FF5924;
+                    color: #FFFFFF;
+                    border: 1px solid #FF5924;
+                    border-radius: 10px;
+                    padding: 2px 6px;
+                    font-size: 11px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #FF8550;
+                    border-color: #FF8550;
+                }
+                QPushButton:pressed {
+                    background-color: #E04414;
+                    border-color: #E04414;
+                }
+            """)
             btn_copy.clicked.connect(lambda checked=False, link=magnet_link: self.copy_to_clipboard(link))
             self.view.table_magnet.setCellWidget(row, 2, btn_copy)
 

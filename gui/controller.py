@@ -1037,8 +1037,8 @@ class Controller:
         title = detail.get("title", "")
         self.view.lbl_info_title.setText(
             f"<div style='margin-top: 10px;'>"
-            f"  <span style='color: #D4AF37; font-size: 11px; font-weight: bold; background-color: #252525; padding: 2px 8px; border-radius: 3px; border: 1px solid #D4AF37;'>{code}</span>"
-            f"  <div style='color: #F5F5F7; font-size: 13px; font-weight: bold; margin-top: 8px; line-height: 1.35;'>{title}</div>"
+            f"  <span style='color: #FF5924; font-size: 11px; font-weight: bold; background-color: #252636; padding: 3px 10px; border-radius: 12px; border: 1.5px solid #FF5924;'>{code}</span>"
+            f"  <div style='color: #F5F5F7; font-family: Lora, Georgia, serif; font-style: italic; font-size: 15px; font-weight: 500; margin-top: 10px; line-height: 1.35;'>{title}</div>"
             f"</div>"
         )
 

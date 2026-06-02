@@ -314,76 +314,93 @@ class MainWindow(QMainWindow):
     def apply_stylesheet(self):
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #121212;
+                background-color: #0D0E15;
             }
             QWidget {
                 color: #F5F5F7;
-                font-family: "SF Pro Display", "PingFang SC", "Segoe UI", sans-serif;
+                font-family: "Inter", "SF Pro Display", "PingFang SC", "Segoe UI", sans-serif;
                 font-size: 13px;
             }
             #LeftPanel, #RightPanel {
-                background-color: #1E1E1E;
-                border-radius: 8px;
-                border: 1px solid #2C2C2C;
+                background-color: #1A1C2E;
+                border-radius: 16px;
+                border: 1px solid #2C2E3E;
             }
             QLabel {
                 font-weight: bold;
             }
             QLineEdit, QTextEdit {
-                background-color: #2A2A2A;
-                border: 1px solid #3A3A3A;
-                border-radius: 4px;
-                padding: 6px;
+                background-color: #252636;
+                border: 1px solid #3A3D52;
+                border-radius: 8px;
+                padding: 6px 10px;
                 color: #F5F5F7;
             }
             QLineEdit:focus, QTextEdit:focus {
-                border: 1px solid #D4AF37;
+                border: 1.5px solid #FF5924;
             }
             QPushButton {
-                background-color: #2E2E2E;
-                border: 1px solid #444444;
-                border-radius: 4px;
-                padding: 8px 12px;
-                font-weight: bold;
+                background-color: #252636;
+                border: 1.5px solid #3A3D52;
+                border-radius: 20px;
+                padding: 8px 16px;
+                font-weight: 600;
                 color: #F5F5F7;
             }
             QPushButton:hover {
-                background-color: #3E3E3E;
-                border-color: #D4AF37;
+                background-color: #2C2D42;
+                border-color: #FF5924;
+            }
+            QPushButton:pressed {
+                background-color: #1E1F30;
+                padding-top: 9px;
+                padding-bottom: 7px;
             }
             #StartBtn {
-                background-color: #2E2E2E;
-                border: 1px solid #D4AF37;
-                color: #D4AF37;
+                background-color: transparent;
+                border: 1.5px solid #FF5924;
+                color: #FF5924;
             }
             #StartBtn:hover {
-                background-color: #3E3E3E;
-                color: #E5C158;
+                background-color: rgba(255, 89, 36, 0.15);
+                color: #FF8550;
+                border-color: #FF8550;
+            }
+            #StartBtn:pressed {
+                background-color: rgba(255, 89, 36, 0.25);
+                padding-top: 9px;
+                padding-bottom: 7px;
             }
             #AddCodeBtn {
-                background-color: #2E2E2E;
-                border: 1px solid #444444;
+                background-color: transparent;
+                border: 1.5px solid #3A3D52;
                 color: #F5F5F7;
             }
             #AddCodeBtn:hover {
-                background-color: #3E3E3E;
-                border-color: #D4AF37;
+                background-color: #2C2D42;
+                border-color: #FF5924;
             }
             #OrganizeBtn {
-                background-color: #D4AF37;
-                color: #121212;
+                background-color: #FF5924;
+                color: #FFFFFF;
                 border: none;
+                border-radius: 20px;
             }
             #OrganizeBtn:hover {
-                background-color: #E5C158;
+                background-color: #FF8550;
+            }
+            #OrganizeBtn:pressed {
+                background-color: #E04414;
+                padding-top: 9px;
+                padding-bottom: 7px;
             }
             #SamplesScroll {
-                background-color: #2A2A2A;
-                border: 1px solid #3A3A3A;
-                border-radius: 6px;
+                background-color: #252636;
+                border: 1px solid #3A3D52;
+                border-radius: 12px;
             }
             #SamplesTitle {
-                color: #D4AF37;
+                color: #FF5924;
                 font-size: 12px;
                 margin-top: 5px;
             }
@@ -392,135 +409,152 @@ class MainWindow(QMainWindow):
                 font-weight: bold;
             }
             #MagnetTitle {
-                color: #D4AF37;
+                color: #FF5924;
                 font-size: 12px;
                 margin-top: 5px;
             }
             #MagnetTable {
-                background-color: #2A2A2A;
-                border: 1px solid #3A3A3A;
-                border-radius: 6px;
-                gridline-color: #3A3A3A;
+                background-color: #252636;
+                border: 1px solid #3A3D52;
+                border-radius: 12px;
+                gridline-color: #2C2E3E;
             }
             #MagnetTable::item {
                 color: #F5F5F7;
                 padding: 4px;
             }
             #CopyMagnetBtn {
-                background-color: #D4AF37;
-                color: #121212;
+                background-color: #FF5924;
+                color: #FFFFFF;
                 border: none;
-                border-radius: 3px;
-                padding: 3px 6px;
+                border-radius: 12px;
+                padding: 3px 8px;
                 font-size: 11px;
                 font-weight: bold;
             }
             #CopyMagnetBtn:hover {
-                background-color: #E5C158;
+                background-color: #FF8550;
+            }
+            #CopyMagnetBtn:pressed {
+                background-color: #E04414;
             }
             #RemoveSelectedBtn {
-                background-color: #2E2E2E;
-                border: 1px solid #444444;
+                background-color: transparent;
+                border: 1.5px solid #3A3D52;
                 color: #FF453A;
             }
             #RemoveSelectedBtn:hover {
-                background-color: #3E3E3E;
+                background-color: rgba(255, 69, 58, 0.1);
                 border-color: #FF453A;
             }
+            #RemoveSelectedBtn:pressed {
+                background-color: rgba(255, 69, 58, 0.2);
+                padding-top: 9px;
+                padding-bottom: 7px;
+            }
             #RetryFailedBtn {
-                background-color: #2E2E2E;
-                border: 1px solid #D4AF37;
+                background-color: transparent;
+                border: 1.5px solid #D4AF37;
                 color: #D4AF37;
             }
             #RetryFailedBtn:hover {
-                background-color: #3E3E3E;
+                background-color: rgba(212, 175, 55, 0.1);
                 color: #E5C158;
+                border-color: #E5C158;
+            }
+            #RetryFailedBtn:pressed {
+                background-color: rgba(212, 175, 55, 0.2);
+                padding-top: 9px;
+                padding-bottom: 7px;
             }
             #DropZone {
-                border: 2px dashed #444444;
-                border-radius: 8px;
-                background-color: #1E1E1E;
-                color: #8E8E93;
+                border: 2px dashed #4A4D68;
+                border-radius: 12px;
+                background-color: #1A1C2E;
+                color: #8892A1;
                 font-size: 14px;
             }
             #DropZone:hover {
-                border-color: #D4AF37;
-                background-color: #252525;
+                border-color: #FF5924;
+                background-color: #20223A;
             }
             QTableWidget {
-                background-color: #1E1E1E;
-                alternate-background-color: #252525;
-                gridline-color: #2C2C2C;
-                border: 1px solid #2C2C2C;
-                border-radius: 6px;
+                background-color: #1A1C2E;
+                alternate-background-color: #20223A;
+                gridline-color: #2C2E3E;
+                border: 1px solid #2C2E3E;
+                border-radius: 12px;
             }
             QTableWidget::item {
                 padding: 5px;
             }
             QHeaderView::section {
-                background-color: #2E2E2E;
+                background-color: #252636;
                 color: #F5F5F7;
-                padding: 5px;
-                border: 1px solid #2C2C2C;
+                padding: 6px;
+                border: 1px solid #2C2E3E;
                 font-weight: bold;
             }
             #CoverPreview {
-                background-color: #2A2A2A;
-                border: 1px solid #3A3A3A;
-                border-radius: 6px;
-                color: #8E8E93;
+                background-color: #252636;
+                border: 1px solid #3A3D52;
+                border-radius: 16px;
+                color: #8892A1;
             }
             #InfoTitle {
+                font-family: "Lora", "Georgia", "Times New Roman", serif;
                 font-size: 13px;
-                color: #D4AF37;
+                color: #FF5924;
                 font-weight: bold;
             }
             #InfoDetails {
-                color: #8E8E93;
+                color: #8892A1;
                 line-height: 1.5;
             }
             QMessageBox, QDialog, QInputDialog {
-                background-color: #1E1E1E;
+                background-color: #1A1C2E;
+                border: 1px solid #2C2E3E;
+                border-radius: 16px;
             }
             QMessageBox QLabel, QInputDialog QLabel {
                 color: #F5F5F7;
                 font-size: 13px;
             }
             QMessageBox QPushButton, QInputDialog QPushButton {
-                background-color: #2E2E2E;
-                border: 1px solid #444444;
+                background-color: #252636;
+                border: 1.5px solid #3A3D52;
                 color: #F5F5F7;
-                padding: 6px 12px;
+                padding: 6px 14px;
                 font-weight: bold;
-                border-radius: 4px;
-                min-width: 65px;
+                border-radius: 15px;
+                min-width: 75px;
             }
             QMessageBox QPushButton:hover, QInputDialog QPushButton:hover {
-                background-color: #3E3E3E;
-                border-color: #D4AF37;
+                background-color: #2C2D42;
+                border-color: #FF5924;
             }
             QTableWidget QLineEdit {
                 padding: 0px;
-                border: 1px solid #D4AF37;
+                border: 1px solid #FF5924;
                 border-radius: 0px;
-                background-color: #2A2A2A;
+                background-color: #252636;
                 color: #F5F5F7;
             }
             #EmptyPlaceholder {
-                border: 2px dashed #3A3A3A;
-                border-radius: 8px;
-                background-color: #1A1A1A;
+                border: 2px dashed #3A3D52;
+                border-radius: 12px;
+                background-color: #151624;
             }
             #CopyrightLabel {
                 background-color: transparent;
             }
             #CopyrightLabel a {
-                color: #D4AF37;
+                color: #FF5924;
                 font-weight: bold;
                 text-decoration: none;
             }
             #CopyrightLabel a:hover {
-                color: #E5C158;
+                color: #FF8550;
                 text-decoration: underline;
             }
         """)

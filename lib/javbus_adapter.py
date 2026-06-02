@@ -34,6 +34,18 @@ class JavbusAdapter(BaseAdapter):
         else:
             self.proxy = proxy
         
+        # JavBus 的备用镜像域名列表，在封锁 www.javbus.com 时自动轮询容灾
+        self.domains = [
+            "https://www.javbus.com",
+            "https://www.busdmm.icu",
+            "https://www.busdmm.cyou",
+            "https://www.busdmm.lol",
+            "https://www.busdmm.xyz",
+            "https://www.javbus.work",
+            "https://www.javbus.pm"
+        ]
+        self.current_domain_index = 0
+        
         # 设置请求头
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -41,15 +53,39 @@ class JavbusAdapter(BaseAdapter):
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         })
     
+    @property
+    def current_domain(self) -> str:
+        return self.domains[self.current_domain_index]
+
     def get_platform(self) -> Platform:
         """返回平台类型"""
         return self.platform
     
     def _get(self, url: str, **kwargs) -> requests.Response:
-        """发送 GET 请求"""
+        """发送 GET 请求，支持域名自动轮询容灾"""
+        # 将传入的旧 BASE_URL 替换为当前正在尝试的镜像域名
+        current_url = url.replace(self.BASE_URL, self.current_domain)
+        
         proxies = {'http': self.proxy, 'https': self.proxy} if self.proxy else None
-        # 使用 impersonate 绕过 Cloudflare 和年龄验证
-        return self.session.get(url, proxies=proxies, timeout=30, impersonate="chrome120", **kwargs)
+        
+        try:
+            response = self.session.get(current_url, proxies=proxies, timeout=12, impersonate="chrome120", **kwargs)
+            if response.status_code in [200, 404]:
+                return response
+            response.raise_for_status()
+        except Exception as e:
+            original_index = self.current_domain_index
+            for i in range(1, len(self.domains)):
+                self.current_domain_index = (original_index + i) % len(self.domains)
+                alt_url = url.replace(self.BASE_URL, self.current_domain)
+                print(f"JavBus 连接超时或风控，正在尝试备用镜像域名: {self.current_domain}")
+                try:
+                    response = self.session.get(alt_url, proxies=proxies, timeout=12, impersonate="chrome120", **kwargs)
+                    if response.status_code in [200, 404]:
+                        return response
+                except Exception:
+                    continue
+            raise e
     
     def _parse_movie_item(self, item: BeautifulSoup) -> Optional[Dict[str, Any]]:
         """解析电影列表项"""
@@ -63,7 +99,7 @@ class JavbusAdapter(BaseAdapter):
             if img.startswith('//'):
                 img = 'https:' + img
             elif img.startswith('/'):
-                img = self.BASE_URL + img
+                img = self.current_domain + img
             
             # 获取番号和日期
             info_tags = item.select('.photo-info date')
@@ -207,7 +243,7 @@ class JavbusAdapter(BaseAdapter):
                     if href.startswith('//'):
                         img = 'https:' + href
                     elif href.startswith('/'):
-                        img = self.BASE_URL + href
+                        img = self.current_domain + href
                     elif href.startswith('http'):
                         img = href
             
@@ -215,7 +251,7 @@ class JavbusAdapter(BaseAdapter):
             if img and img.startswith('//'):
                 img = 'https:' + img
             elif img and img.startswith('/'):
-                img = self.BASE_URL + img
+                img = self.current_domain + img
             
             # 解析基本信息
             info_nodes = soup.select('.container .movie .info p')
@@ -280,7 +316,7 @@ class JavbusAdapter(BaseAdapter):
                     actor_list.append({
                         'name': actor_name,
                         'id': actor_id,
-                        'url': actor_url if actor_url.startswith('http') else f"{self.BASE_URL}{actor_url}"
+                        'url': actor_url if actor_url.startswith('http') else f"{self.current_domain}{actor_url}"
                     })
             
             # 提取样品图片（高清）
@@ -294,7 +330,7 @@ class JavbusAdapter(BaseAdapter):
                     if thumbnail.startswith('//'):
                         thumbnail = 'https:' + thumbnail
                     elif thumbnail.startswith('/'):
-                        thumbnail = self.BASE_URL + thumbnail
+                        thumbnail = self.current_domain + thumbnail
                     
                     # 尝试获取高清图链接
                     # 样品图的高清版本通常在父链接的 href 中
@@ -304,7 +340,7 @@ class JavbusAdapter(BaseAdapter):
                         if sample_link.startswith('//'):
                             full_image = 'https:' + sample_link
                         elif sample_link.startswith('/'):
-                            full_image = self.BASE_URL + sample_link
+                            full_image = self.current_domain + sample_link
                         elif sample_link.startswith('http'):
                             full_image = sample_link
                     
@@ -398,7 +434,7 @@ class JavbusAdapter(BaseAdapter):
                 'uc': uc,
             }
             headers = {
-                'Referer': f"{self.BASE_URL}/{video_id}",
+                'Referer': f"{self.current_domain}/{video_id}",
             }
             
             response = self._get(url, params=params, headers=headers)

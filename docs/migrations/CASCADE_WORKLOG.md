@@ -506,6 +506,27 @@
   - 批量操作充分复用了原有的任务流，状态同步与持久化备份能正常记录且无泄漏风险。
 - **回滚点**: `git reset --hard HEAD~1`
 
+### 49) Feature & Fix: 为 JavBus 适配器构建多域名自动轮询容灾系统，消除国内直连被墙报错
+- **变更文件**: `lib/javbus_adapter.py`
+- **背景与目标**: 解决用户反馈的选择 JAVBUS 平台后无法刮削到任何影片详情的问题。这是由于 JAVBUS 官方主域名（`www.javbus.com`）在国内受限，无法直接物理连通，而 JAVDB 有轮询域名机制所以正常，故为 JAVBUS 也部署一套全自动镜像域名轮询容灾方案。
+- **技术实施**:
+  - **内置备用防封锁镜像列表**：在 `JavbusAdapter` 构造函数中引入 `self.domains` 镜像地址库（包含 7 个常用官方/防屏蔽域名，如 `busdmm.icu`、`busdmm.cyou` 等）。
+  - **HTTP 请求轮询容灾拦截**：重构 `_get` 发包拦截器。当默认的主域名访问遭遇超时、拦截风控引发 OSError/requests 异常时，捕获异常并以 12 秒为超时上限依次在镜像库中进行轮询，成功连接则更新 `current_domain_index` 维持长效，只有全部失败才抛出异常。
+  - **图片/相对 URL 动态适配**：在 `_parse_movie_item` 与 `get_video_detail` 等提取大图、样品缩略图和演员信息拼接相对路径时，将硬编码的 `self.BASE_URL` 替换为 `self.current_domain`，确保一旦成功连接镜像，页面图片和大图也将由对应的防封锁镜像提供，彻底避免死图发生。
+- **风险自查**:
+  - 域名替换和连接切换完全被封装在 Javbus 适配器底层，对 ScrapeWorker 的业务接口没有任何改变，高防 CF 年龄验证也正常继承，对 JAVDB 抓取无任何干预。
+- **回滚点**: `git reset --hard HEAD~1`
+
+### 50) Fix: 修复 JavBus 样品高清大图 URL 拼接未适配镜像域名的问题
+- **变更文件**: `lib/javbus_adapter.py`
+- **背景与目标**: 完善之前的 JavBus 域名容灾机制。之前遗漏了样品高清大图拼接的相对路径，仍在使用硬编码的 `self.BASE_URL`，这会导致国内直连时无法获取样品大图。
+- **技术实施**:
+  - 将 `get_video_detail` 里的样品高清大图相对路径拼接逻辑中的 `self.BASE_URL` 替换为 `self.current_domain`。
+- **风险自查**:
+  - 仅影响 JavBus 的样品大图 URL 返回，经确认无其他影响。
+- **回滚点**: `git reset --hard HEAD~1`
+
+
 
 
 

@@ -188,6 +188,7 @@ class Controller:
         self.task_files = {}
         self.current_preview_filepath = None
         self.processed_parent_dirs = set()
+        self.active_workers = set()
 
         # 默认保存路径为项目根目录下的 output 文件夹
         default_out = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "output"))
@@ -280,11 +281,14 @@ class Controller:
 
                 for fp in added_files:
                     worker = ScrapeWorker(fp, self.task_files[fp]["code"], output_dir, platform, proxies, only_scrape=True)
+                    worker.setAutoDelete(False)
                     worker.signals.started.connect(self.on_worker_started)
                     worker.signals.progress.connect(self.on_worker_progress)
                     worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
                     worker.signals.finished.connect(self.on_worker_finished)
+                    worker.signals.finished_worker.connect(self.on_worker_destroyed)
 
+                    self.active_workers.add(worker)
                     self.scrape_pool.start(worker)
 
     def import_files_manually(self):
@@ -351,11 +355,14 @@ class Controller:
                 platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
 
                 worker = ScrapeWorker(virtual_path, code, output_dir, platform, proxies, only_scrape=True)
+                worker.setAutoDelete(False)
                 worker.signals.started.connect(self.on_worker_started)
                 worker.signals.progress.connect(self.on_worker_progress)
                 worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
                 worker.signals.finished.connect(self.on_worker_finished)
+                worker.signals.finished_worker.connect(self.on_worker_destroyed)
 
+                self.active_workers.add(worker)
                 self.scrape_pool.start(worker)
 
     def handle_cell_changed(self, item):
@@ -576,11 +583,14 @@ class Controller:
 
             # 仅执行刮削预览
             worker = ScrapeWorker(file_path, code, output_dir, platform, proxies, only_scrape=True)
+            worker.setAutoDelete(False)
             worker.signals.started.connect(self.on_worker_started)
             worker.signals.progress.connect(self.on_worker_progress)
             worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
             worker.signals.finished.connect(self.on_worker_finished)
+            worker.signals.finished_worker.connect(self.on_worker_destroyed)
 
+            self.active_workers.add(worker)
             self.scrape_pool.start(worker)
 
     def start_organizing(self):
@@ -634,14 +644,20 @@ class Controller:
 
             # 执行整理落盘。如果已经缓存有元数据，直接传入 detail 免去重复请求
             worker = ScrapeWorker(file_path, code, output_dir, platform, proxies, only_scrape=False, cached_detail=info["detail"])
+            worker.setAutoDelete(False)
             worker.signals.started.connect(self.on_worker_started)
             worker.signals.progress.connect(self.on_worker_progress)
             worker.signals.preview_loaded.connect(self.on_worker_preview_loaded)
             worker.signals.finished.connect(self.on_worker_finished)
+            worker.signals.finished_worker.connect(self.on_worker_destroyed)
 
+            self.active_workers.add(worker)
             self.scrape_pool.start(worker)
 
     # ================== 后台线程信号槽 ==================
+    def on_worker_destroyed(self, worker):
+        self.active_workers.discard(worker)
+
     def on_worker_started(self, filepath):
         if filepath in self.task_files:
             info = self.task_files[filepath]
@@ -917,7 +933,11 @@ class Controller:
                 urls_to_load = thumbnails[1:] if len(thumbnails) > 1 else thumbnails
                 for url in urls_to_load:
                     worker = ImageLoadWorker(filepath, url, proxies)
+                    worker.setAutoDelete(False)
                     worker.signals.loaded.connect(self.on_network_image_loaded)
+                    worker.signals.finished_worker.connect(self.on_worker_destroyed)
+
+                    self.active_workers.add(worker)
                     self.thread_pool.start(worker)
 
     def on_network_image_loaded(self, filepath, url, data):

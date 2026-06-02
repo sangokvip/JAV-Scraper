@@ -44,14 +44,8 @@ class ScrapeWorker(QRunnable):
                     # 清除旧的单例缓存，保证最新的代理/Cookie配置生效
                     AdapterFactory.clear_instance()
                     
-                    if self.platform == "javdb":
-                        adapter = AdapterFactory.get_adapter_by_name("javdb", proxies=self.proxies)
-                        detail = adapter.get_video_by_code(self.code)
-                    else:
-                        proxy_str = self.proxies.get("http") if self.proxies else None
-                        adapter = AdapterFactory.get_adapter_by_name("javbus", proxy=proxy_str)
-                        # JavBus 使用 get_video_detail (用番号直接作为ID)
-                        detail = adapter.get_video_detail(self.code)
+                    adapter = AdapterFactory.get_adapter_by_name("javdb", proxies=self.proxies)
+                    detail = adapter.get_video_by_code(self.code)
 
                 if not detail:
                     self.signals.finished.emit(self.file_path, f"在平台中找不到番号: {self.code}")

@@ -251,11 +251,7 @@ def download_video_images(video_id: str, output_dir: str = "output/images",
     from javdb_api import download_video_images as _download_images
     
     # 构建 Referer 头
-    headers = {}
-    if platform and platform.lower() == 'javbus':
-        headers['Referer'] = f"https://www.javbus.com/{video_id}"
-    else:
-        headers['Referer'] = f"https://javdb.com/v/{video_id}"
+    headers = {'Referer': f"https://javdb.com/v/{video_id}"}
     
     return _download_images(
         video_id=detail.get('code', video_id),
@@ -295,11 +291,6 @@ def search_videos_by_tags(tag_names: List[str], start: int = 0, end: int = 20,
         >>> # 获取第21-40个结果
         >>> works = search_videos_by_tags(["美少女"], start=20, end=40)
     """
-    # JavBus 不支持标签搜索
-    if platform and platform.lower() == 'javbus':
-        print("警告: JavBus 不支持标签搜索")
-        return []
-    
     adapter = get_adapter('javdb')
     
     # 使用标签管理器将标签名称转换为ID
@@ -511,48 +502,26 @@ def get_video_by_code(code: str, platform: str = None,
     if hasattr(adapter, 'get_video_by_code'):
         return adapter.get_video_by_code(code)
     
-    # JavBus 适配器使用 get_video_detail
-    if platform and platform.lower() == 'javbus':
-        return adapter.get_video_detail(code, movie_type=movie_type)
-    
     return None
 
 
 def get_movie_magnets(video_id: str, platform: str = None, 
-                      gid: str = None, uc: str = None,
                       sort_by: str = 'size', sort_order: str = 'desc',
                       **kwargs) -> List[Dict[str, Any]]:
     """
-    获取影片磁力链接（主要支持 JavBus）
+    获取影片磁力链接
     
     Args:
         video_id: 视频ID/番号
         platform: 平台名称
-        gid: JavBus 的 gid 参数（可从详情获取）
-        uc: JavBus 的 uc 参数（可从详情获取）
         sort_by: 排序方式 'size'(大小) 或 'date'(日期)
         sort_order: 排序顺序 'asc'(升序) 或 'desc'(降序)
         **kwargs: 其他参数
         
     Returns:
         磁力链接列表
-        
-    Example:
-        >>> # 先获取详情获取 gid 和 uc
-        >>> detail = get_video_detail("SSIS-865", platform="javbus")
-        >>> magnets = get_movie_magnets("SSIS-865", platform="javbus",
-        ...                             gid=detail['gid'], uc=detail['uc'])
-        >>> for magnet in magnets:
-        ...     print(f"{magnet['title']}: {magnet['size']}")
     """
     adapter = get_adapter(platform)
-    
-    # JavBus 适配器有特殊方法
-    if hasattr(adapter, 'get_movie_magnets'):
-        return adapter.get_movie_magnets(video_id, gid=gid, uc=uc, 
-                                        sort_by=sort_by, sort_order=sort_order)
-    
-    # 其他适配器从详情中获取磁力链接
     detail = adapter.get_video_detail(video_id)
     if detail and 'magnets' in detail:
         return detail['magnets']

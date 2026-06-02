@@ -67,7 +67,6 @@ from javdb_api import JavdbAPI
 from .adapter_factory import AdapterFactory
 from .base_adapter import BaseAdapter
 from .javdb_adapter import JavdbAdapter
-from .javbus_adapter import JavbusAdapter
 
 # ================================================================================
 # =============================== 7个核心 API 接口 ================================
@@ -120,7 +119,6 @@ __all__ = [
     'AdapterFactory',
     'BaseAdapter',
     'JavdbAdapter',
-    'JavbusAdapter',
     
     # ==================== 7个核心 API 接口 ====================
     'search_actor_works',      # 核心功能1: 搜索演员作品

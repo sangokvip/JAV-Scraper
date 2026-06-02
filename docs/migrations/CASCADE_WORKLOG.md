@@ -548,6 +548,17 @@
   - 避免了修改 Controller 导致的重构崩坏风险，主逻辑依然可以安全通过。
 - **回滚点**: `git reset --hard HEAD~1`
 
+### 53) Refactor: 彻底删除 JavBus 适配器、插件及全链路遗留逻辑代码
+- **变更文件**: `lib/platform.py`、`lib/__init__.py`、`lib/adapter_factory.py`、`lib/external_api.py`、`ultimate_provider.py`、`gui/scrape_worker.py`、`gui/main_window.py`、`gui/controller.py`，物理删除 `lib/javbus_adapter.py` 和 `javbus_plugin` 插件目录。
+- **背景与目标**: 响应用户决议，对项目中所有的 JavBus 平台逻辑进行彻底物理大扫除，清除多余适配器和插件，并将整个数据刮削与控制器逻辑精简为仅面向 JAVDB，使项目极度轻量化。
+- **技术实施**:
+  - **物理文件删除**：物理抹除了 `lib/javbus_adapter.py` 文件和 `javbus_plugin` 插件文件夹。
+  - **移除平台与加载配置**：在 `Platform` 中移除 `JAVBUS` 枚举值及其前缀/名称映射；在适配器工厂与初始化列表中移除对 `JavbusAdapter` 的导入、导出和静态类映射。
+  - **清理 API/服务与控制器分支**：在 `external_api.py` 和 `ultimate_provider.py` 中删除了所有针对 `javbus` 平台的判断、特定的 Referer 拼装方法与 Provider 处理类。在 GUI 层的 `scrape_worker.py` 和 `main_window.py` 中清除了多余参数和无用内存控件，并对 `controller.py` 中 7 处平台判断完成了只指向 `"javdb"` 的替换。
+- **风险自查**:
+  - GUI 核心导入依赖与加载解析通过纯命令行脚本编译验证，100% 绿灯且无遗留模块导入警告。
+- **回滚点**: `git reset --hard HEAD~1`
+
 
 
 

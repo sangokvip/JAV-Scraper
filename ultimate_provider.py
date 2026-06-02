@@ -36,7 +36,6 @@ if os.path.exists(JAVDB_UTILS_PATH) and "utils" not in sys.modules:
 from protocol.base import ProtocolProvider
 from protocol.credential_guard import get_adapter_credential_status
 from javdb_api import JavdbAPI
-from lib.javbus_adapter import JavbusAdapter as PluginJavbusAdapter
 from lib.javdb_adapter import JavdbAdapter as PluginJavdbAdapter
 
 
@@ -505,36 +504,3 @@ class JavdbProvider(_VideoProviderBase):
             return self._build_health_status_payload(config)
         raise ValueError(f"unsupported capability: {capability}")
 
-
-class JavbusProvider(ProtocolProvider):
-    def _get_adapter(self, config: Dict[str, Any], *args, **kwargs):
-        existing_tags = []
-        if args and isinstance(args[0], list):
-            existing_tags = args[0]
-        return PluginJavbusAdapter(existing_tags)
-
-    def execute(self, capability: str, params: Dict[str, Any], context: Dict[str, Any], config: Dict[str, Any]):
-        adapter = self._get_adapter(config, params.get("existing_tags") or [])
-        if capability == "catalog.search":
-            return adapter.search_videos(
-                str(params.get("keyword") or ""),
-                page=int(params.get("page", 1) or 1),
-                max_pages=int(params.get("max_pages", 1) or 1),
-            )
-        if capability == "catalog.detail":
-            return adapter.get_video_detail(str(params.get("video_id") or ""))
-        if capability == "person.search":
-            return adapter.search_actor(str(params.get("actor_name") or ""))
-        if capability == "person.works":
-            return adapter.get_actor_works(
-                str(params.get("actor_id") or ""),
-                page=int(params.get("page", 1) or 1),
-                max_pages=int(params.get("max_pages", 1) or 1),
-            )
-        if capability == "health.query.status":
-            return {
-                "configured": True,
-                "message": "",
-                "missing_fields": [],
-            }
-        raise ValueError(f"unsupported capability: {capability}")

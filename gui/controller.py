@@ -355,7 +355,7 @@ class Controller:
                 if self.view.chk_custom_proxy.isChecked():
                     proxy = self.view.proxy_input.text().strip()
                     proxies = {"http": proxy, "https": proxy} if proxy else None
-                platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
+                platform = "javdb"
 
                 for fp in added_files:
                     worker = ScrapeWorker(fp, self.task_files[fp]["code"], output_dir, platform, proxies, only_scrape=True)
@@ -433,7 +433,7 @@ class Controller:
                 if self.view.chk_custom_proxy.isChecked():
                     proxy = self.view.proxy_input.text().strip()
                     proxies = {"http": proxy, "https": proxy} if proxy else None
-                platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
+                platform = "javdb"
 
                 worker = ScrapeWorker(virtual_path, code, output_dir, platform, proxies, only_scrape=True)
                 worker.setAutoDelete(False)
@@ -483,7 +483,7 @@ class Controller:
                     if self.view.chk_custom_proxy.isChecked():
                         proxy = self.view.proxy_input.text().strip()
                         proxies = {"http": proxy, "https": proxy} if proxy else None
-                    platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
+                    platform = "javdb"
 
                     worker = ScrapeWorker(target_fp, new_code, output_dir, platform, proxies, only_scrape=True)
                     worker.setAutoDelete(False)
@@ -679,7 +679,7 @@ class Controller:
         if self.view.chk_custom_proxy.isChecked():
             proxy = self.view.proxy_input.text().strip()
             proxies = {"http": proxy, "https": proxy} if proxy else None
-        platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
+        platform = "javdb"
         
         for fp in file_paths:
             info = self.task_files.get(fp)
@@ -715,7 +715,7 @@ class Controller:
         if self.view.chk_custom_proxy.isChecked():
             proxy = self.view.proxy_input.text().strip()
             proxies = {"http": proxy, "https": proxy} if proxy else None
-        platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
+        platform = "javdb"
         
         for fp in file_paths:
             info = self.task_files.get(fp)
@@ -944,7 +944,7 @@ class Controller:
         if self.view.chk_custom_proxy.isChecked():
             proxy = self.view.proxy_input.text().strip()
             proxies = {"http": proxy, "https": proxy} if proxy else None
-        platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
+        platform = "javdb"
 
         for file_path in todo_files:
             info = self.task_files[file_path]
@@ -1006,7 +1006,7 @@ class Controller:
         if self.view.chk_custom_proxy.isChecked():
             proxy = self.view.proxy_input.text().strip()
             proxies = {"http": proxy, "https": proxy} if proxy else None
-        platform = "javdb" if self.view.radio_javdb.isChecked() else "javbus"
+        platform = "javdb"
 
         for file_path in todo_files:
             info = self.task_files[file_path]

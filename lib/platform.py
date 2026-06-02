@@ -9,19 +9,16 @@ from typing import Optional, Tuple
 class Platform(Enum):
     """平台枚举"""
     JAVDB = "JAVDB"      # JAVDB平台
-    JAVBUS = "JAVBUS"    # JavBus平台
 
 
 # 平台前缀映射
 PLATFORM_PREFIXES = {
     Platform.JAVDB: "JAVDB",
-    Platform.JAVBUS: "JAVBUS",
 }
 
 # 平台名称映射（用于显示）
 PLATFORM_NAMES = {
     Platform.JAVDB: "JAVDB",
-    Platform.JAVBUS: "JavBus",
 }
 
 

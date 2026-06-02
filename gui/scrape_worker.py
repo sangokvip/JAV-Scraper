@@ -52,6 +52,10 @@ class ScrapeWorker(QRunnable):
                 self.signals.finished.emit(self.file_path, f"在平台中找不到番号: {self.code}")
                 return
 
+            # 若不是手动输入的虚拟任务，则将磁力列表置空，不显示磁力
+            if not self.file_path.startswith("__virtual__:"):
+                detail["magnets"] = []
+
             # 发送预览加载信号，供主界面渲染详情卡片
             self.signals.preview_loaded.emit(self.file_path, detail)
 

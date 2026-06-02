@@ -51,9 +51,10 @@ from .base_adapter import BaseAdapter
 from javdb_api import JavdbAPI
 
 
-# 配置文件路径 (使用 config 中的 PROJECT_ROOT，避免打包时定位到包内只读区)
-from config import PROJECT_ROOT
-CONFIG_FILE = PROJECT_ROOT / "third_party_config.json"
+# 配置文件路径 (区分可写用户配置与内嵌默认配置)
+from config import DATA_DIR, BUNDLE_DIR
+CONFIG_FILE_USER = DATA_DIR / "third_party_config.json"
+CONFIG_FILE_BUNDLE = BUNDLE_DIR / "third_party_config.json"
 
 # 默认平台
 DEFAULT_PLATFORM = Platform.JAVDB
@@ -61,8 +62,9 @@ DEFAULT_PLATFORM = Platform.JAVDB
 
 def load_config() -> Dict[str, Any]:
     """加载配置文件"""
-    if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+    config_file = CONFIG_FILE_USER if CONFIG_FILE_USER.exists() else CONFIG_FILE_BUNDLE
+    if config_file.exists():
+        with open(config_file, 'r', encoding='utf-8') as f:
             return json.load(f)
     return {
         "default_adapter": "javdb",
@@ -77,7 +79,7 @@ def load_config() -> Dict[str, Any]:
 
 def save_config(config: Dict[str, Any]):
     """保存配置文件"""
-    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+    with open(CONFIG_FILE_USER, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
 
 

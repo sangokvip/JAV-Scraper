@@ -4,33 +4,60 @@ JAVDB API 配置文件示例
 """
 
 import os
+import sys
 from pathlib import Path
 
-# 项目根目录 (适配 PyInstaller 打包状态下对外部真实物理可写目录的定位)
-import sys
+# ============================================================================
+# 路径分层体系 (适配 PyInstaller 打包与开发态)
+# ============================================================================
+#
+# BUNDLE_DIR  — 只读资源目录 (cookies.json, lib/, gui/, third_party_config.json)
+#               打包态: sys._MEIPASS (macOS: .app/Contents/Resources/)
+#               开发态: 项目根目录
+#
+# DATA_DIR    — 可写用户数据目录 (settings_backup, tasks_backup, output/)
+#               打包态: .app 所在目录 (即 dist/)
+#               开发态: 项目根目录
+#
+# PROJECT_ROOT — 向后兼容别名，等同于 DATA_DIR
+# ============================================================================
+
 if getattr(sys, 'frozen', False):
+    # ---- PyInstaller 打包态 ----
+    # BUNDLE_DIR: PyInstaller 解压后的内嵌只读资源根目录
+    BUNDLE_DIR = Path(sys._MEIPASS)
+
+    # DATA_DIR: 可写的外部用户数据目录
     exe_path = Path(sys.executable)
     exe_dir = exe_path.parent
     # macOS Bundle (.app) 内部路径: xxx.app/Contents/MacOS/JAV SCRAPER
     if "Contents/MacOS" in str(exe_dir):
-        PROJECT_ROOT = exe_dir.parent.parent.parent
+        DATA_DIR = exe_dir.parent.parent.parent
     else:
-        PROJECT_ROOT = exe_dir
+        DATA_DIR = exe_dir
 else:
-    PROJECT_ROOT = Path(__file__).parent
+    # ---- 开发态 (python3 main.py) ----
+    BUNDLE_DIR = Path(__file__).parent
+    DATA_DIR = Path(__file__).parent
+
+# 向后兼容
+PROJECT_ROOT = DATA_DIR
 
 # 输出目录配置
 OUTPUT_DIR = {
-    'root': PROJECT_ROOT / 'output',
-    'csv': PROJECT_ROOT / 'output' / 'csv',
-    'json': PROJECT_ROOT / 'output' / 'json',
-    'images': PROJECT_ROOT / 'output' / 'images',
-    'magnets': PROJECT_ROOT / 'output' / 'magnets',
+    'root': DATA_DIR / 'output',
+    'csv': DATA_DIR / 'output' / 'csv',
+    'json': DATA_DIR / 'output' / 'json',
+    'images': DATA_DIR / 'output' / 'images',
+    'magnets': DATA_DIR / 'output' / 'magnets',
 }
 
 # 确保输出目录存在
 for dir_path in OUTPUT_DIR.values():
-    dir_path.mkdir(parents=True, exist_ok=True)
+    try:
+        dir_path.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass  # 打包环境下某些路径可能暂时不可写，不阻塞启动
 
 # 默认输出文件名
 DEFAULT_OUTPUT = {
@@ -74,8 +101,14 @@ HEADERS = {
     'Upgrade-Insecure-Requests': '1',
 }
 
-# Cookie 文件 (使用绝对路径，避免在 macOS .app CWD 漂移时偏离)
-COOKIE_FILE = str(PROJECT_ROOT / 'cookies.json')
+# Cookie 文件 — 优先使用 DATA_DIR 下用户手动放置/更新的版本，
+#              未找到时回退到 BUNDLE_DIR 下打包内嵌的初始版本。
+_cookie_user = DATA_DIR / 'cookies.json'
+_cookie_bundle = BUNDLE_DIR / 'cookies.json'
+if _cookie_user.exists():
+    COOKIE_FILE = str(_cookie_user)
+else:
+    COOKIE_FILE = str(_cookie_bundle)
 
 # 登录配置 - 请填入你的账号信息
 LOGIN = {

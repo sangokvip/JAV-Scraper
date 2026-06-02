@@ -603,3 +603,14 @@
 
 
 
+
+### 10) Fix: 修复打包后由于路径偏移导致资源丢失的问题
+- **变更文件**: `config.py`, `lib/external_api.py`
+- **背景与目标**: PyInstaller 打包为 .app 格式后，只读内嵌资源 (cookies, configs) 位于 _MEIPASS，而程序需要在外部可写的目录(dist)存储修改。这导致配置文件和用户 cookie 在打包后无法正确加载与存储。
+- **技术实施**:
+  - 在 `config.py` 中实现了 `BUNDLE_DIR` (只读内嵌资源) 和 `DATA_DIR` (可写用户目录) 的分离。
+  - 在 `lib/external_api.py` 中更新了 `third_party_config.json` 的加载与存储逻辑，允许从 `DATA_DIR` 加载，并在不存在时回退到 `BUNDLE_DIR`。
+- **风险自查**:
+  - 确保向后兼容，开发环境和构建环境路径现在逻辑一致。
+- **回滚点**:
+  - `git checkout HEAD~1 config.py lib/external_api.py`

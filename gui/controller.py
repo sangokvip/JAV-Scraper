@@ -120,10 +120,25 @@ class Controller:
         self.view.lbl_proxy_status.setStyleSheet("color: #E5C158;")
         
         proxies = {"http": proxy, "https": proxy} if proxy else None
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+
+        # 1. 优先尝试访问 google.com 验证代理隧道本身的连通性
         try:
-            # 访问 JAVDB 验证连接
-            r = requests.get("https://javdb.com", timeout=10, proxies=proxies)
+            r = requests.get("https://www.google.com", timeout=8, proxies=proxies, headers=headers)
             if r.status_code == 200:
+                self.view.lbl_proxy_status.setText("连接正常 (OK)")
+                self.view.lbl_proxy_status.setStyleSheet("color: #34C759;")
+                return
+        except:
+            pass
+
+        # 2. 如果 google 失败或不可达，尝试访问 javdb 并包容 403 (CF 拦截代表物理通畅)
+        try:
+            r = requests.get("https://javdb.com", timeout=8, proxies=proxies, headers=headers)
+            if r.status_code in [200, 301, 302, 403]:
+                # JAVDB 常有 Cloudflare 盾，返回 403 仍代表代理打通并能抵达目标网站
                 self.view.lbl_proxy_status.setText("连接正常 (OK)")
                 self.view.lbl_proxy_status.setStyleSheet("color: #34C759;")
             else:

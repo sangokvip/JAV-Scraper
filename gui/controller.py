@@ -23,13 +23,13 @@ class Controller:
 
         # 信号槽绑定
         self.view.files_dropped.connect(self.handle_files_dropped)
-        self.view.btn_browse.connect(self.browse_output_dir)
-        self.view.btn_clear.connect(self.clear_all_tasks)
-        self.view.btn_start.connect(self.start_scraping)
-        self.view.btn_test_proxy.connect(self.test_proxy_connection)
+        self.view.btn_browse.clicked.connect(self.browse_output_dir)
+        self.view.btn_clear.clicked.connect(self.clear_all_tasks)
+        self.view.btn_start.clicked.connect(self.start_scraping)
+        self.view.btn_test_proxy.clicked.connect(self.test_proxy_connection)
         self.view.table.itemSelectionChanged.connect(self.handle_selection_changed)
         self.view.table.itemChanged.connect(self.handle_cell_changed)
-        self.view.btn_save_cookie.connect(self.save_cookie_config)
+        self.view.btn_save_cookie.clicked.connect(self.save_cookie_config)
 
         # 自动加载已有的 Cookie 进行显示
         self.load_cookie_config()

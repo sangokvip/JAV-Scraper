@@ -1,8 +1,10 @@
 import os
 import json
 
+from config import PROJECT_ROOT
+
 DEFAULT_BACKUP_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "tasks_backup.json")
+    os.path.join(PROJECT_ROOT, "tasks_backup.json")
 )
 
 def save_tasks_backup(task_files: dict, filepath: str = DEFAULT_BACKUP_PATH):
@@ -63,7 +65,7 @@ def load_tasks_backup(filepath: str = DEFAULT_BACKUP_PATH) -> dict:
         return {}
 
 DEFAULT_SETTINGS_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "settings_backup.json")
+    os.path.join(PROJECT_ROOT, "settings_backup.json")
 )
 
 def save_settings_backup(settings: dict, filepath: str = DEFAULT_SETTINGS_PATH):

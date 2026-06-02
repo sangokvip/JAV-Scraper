@@ -51,8 +51,9 @@ from .base_adapter import BaseAdapter
 from javdb_api import JavdbAPI
 
 
-# 配置文件路径
-CONFIG_FILE = Path(__file__).parent.parent / "third_party_config.json"
+# 配置文件路径 (使用 config 中的 PROJECT_ROOT，避免打包时定位到包内只读区)
+from config import PROJECT_ROOT
+CONFIG_FILE = PROJECT_ROOT / "third_party_config.json"
 
 # 默认平台
 DEFAULT_PLATFORM = Platform.JAVDB

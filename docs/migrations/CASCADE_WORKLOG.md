@@ -581,6 +581,18 @@
   - 在 macOS 本地通过 `sh build_mac.sh` 完整执行了打包过程，成功输出了 `dist/JAV SCRAPER.app` 并在本地测试可流畅载入、且 Dock 及窗口能完美呈现定制设计的图标。
 - **回滚点**: `git reset --hard HEAD~1`
 
+### 56) Fix: 修复打包后定位至包内只读区写入引起的只读文件系统阻断 Bug
+- **变更文件**: `config.py`、`lib/external_api.py`、`gui/task_persister.py`、`docs/migrations/CASCADE_WORKLOG.md`
+- **背景与目标**: 解决用户双击运行打包后的 `.app` 应用程序时，由于 `Path(__file__)` 重定向至包内只读的 `_MEIPASS` 临时释放目录，导致写入设置、备份任务和保存 cookies 时触发 `OSError (Errno 30) Read-only file system` 阻断，进而导致程序无法正常刮削和运行的严重 Bug。
+- **技术实施**:
+  - **动态可写根目录定位**：重构 `config.py` 中的 `PROJECT_ROOT` 获取方式。在 `sys.frozen` 打包态下，动态通过 `sys.executable` 逆向追溯获取真实的物理可执行文件所在的外部目录（对于 macOS .app 向上追溯 3 级至 `.app` 的同级外部目录；Windows 为 `.exe` 同级目录），从而将根目录指向可读可写物理区域。
+  - **路径全量绝对化**：将 `COOKIE_FILE` 由相对路径 `'cookies.json'` 重构为基于 `PROJECT_ROOT` 的绝对路径，以防止 macOS 双击运行时 CWD 漂移。
+  - **适配三方配置与备份加载**：将 `lib/external_api.py` 中的 `CONFIG_FILE` 及 `gui/task_persister.py` 中的任务与系统设置备份路径，统一由基于 `__file__` 相对路径修改为引用自 `config.PROJECT_ROOT`，实现持久化文件的全局物理纠偏。
+- **风险自查**:
+  - 重构后已本地通过常规启动和打包启动交叉测试，所有本地生成、备份与 cookies 文件均平滑回写于外部绝对路径下，消除了只读拦截风险。
+- **回滚点**: `git reset --hard HEAD~1`
+
+
 
 
 

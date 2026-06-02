@@ -6,8 +6,18 @@ JAVDB API 配置文件示例
 import os
 from pathlib import Path
 
-# 项目根目录
-PROJECT_ROOT = Path(__file__).parent
+# 项目根目录 (适配 PyInstaller 打包状态下对外部真实物理可写目录的定位)
+import sys
+if getattr(sys, 'frozen', False):
+    exe_path = Path(sys.executable)
+    exe_dir = exe_path.parent
+    # macOS Bundle (.app) 内部路径: xxx.app/Contents/MacOS/JAV SCRAPER
+    if "Contents/MacOS" in str(exe_dir):
+        PROJECT_ROOT = exe_dir.parent.parent.parent
+    else:
+        PROJECT_ROOT = exe_dir
+else:
+    PROJECT_ROOT = Path(__file__).parent
 
 # 输出目录配置
 OUTPUT_DIR = {
@@ -64,8 +74,8 @@ HEADERS = {
     'Upgrade-Insecure-Requests': '1',
 }
 
-# Cookie 文件
-COOKIE_FILE = 'cookies.json'
+# Cookie 文件 (使用绝对路径，避免在 macOS .app CWD 漂移时偏离)
+COOKIE_FILE = str(PROJECT_ROOT / 'cookies.json')
 
 # 登录配置 - 请填入你的账号信息
 LOGIN = {

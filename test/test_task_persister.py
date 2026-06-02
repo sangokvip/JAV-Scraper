@@ -1,7 +1,10 @@
 import os
 import json
 import tempfile
-from gui.task_persister import save_tasks_backup, load_tasks_backup
+from gui.task_persister import (
+    save_tasks_backup, load_tasks_backup,
+    save_settings_backup, load_settings_backup
+)
 
 def test_task_persister_save_and_load():
     # 创建临时测试文件存储备份
@@ -70,3 +73,25 @@ def test_task_persister_load_missing_file():
     # 模拟载入不存在的文件，应返回空字典而不报错
     loaded_tasks = load_tasks_backup(filepath="/path/to/does_not_exist_backup_123.json")
     assert loaded_tasks == {}
+
+def test_settings_persister_save_and_load():
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+        settings_path = tmp.name
+    try:
+        mock_settings = {
+            "output_dir": "/Volumes/homes/Download/output"
+        }
+        save_settings_backup(mock_settings, filepath=settings_path)
+        assert os.path.exists(settings_path)
+        
+        loaded = load_settings_backup(filepath=settings_path)
+        assert loaded == mock_settings
+        assert loaded["output_dir"] == "/Volumes/homes/Download/output"
+    finally:
+        if os.path.exists(settings_path):
+            os.remove(settings_path)
+
+def test_settings_persister_load_missing_file():
+    loaded = load_settings_backup(filepath="/path/to/does_not_exist_settings_123.json")
+    assert loaded == {}
+

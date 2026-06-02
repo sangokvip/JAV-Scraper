@@ -52,7 +52,8 @@ cookies.json
 config_local.py
 
 # 输出目录
-output/csv
-output/images
-output/json
-output/magnets
+/output/
+settings_backup.json
+tasks_backup.json
+malicious_code.nfo
+.DS_Store

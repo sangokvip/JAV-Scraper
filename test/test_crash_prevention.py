@@ -23,7 +23,8 @@ def test_image_load_worker_signals_finished():
         worker.signals.loaded.emit.assert_called_once_with(
             "/path/to/video.mp4",
             "http://example.com/image.jpg",
-            b"fake image bytes"
+            b"fake image bytes",
+            False
         )
         # 确保销毁信号被发射，实现内存安全回收
         worker.signals.finished_worker.emit.assert_called_once_with(worker)

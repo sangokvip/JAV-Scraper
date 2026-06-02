@@ -27,7 +27,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("JAVDB API Scraper GUI")
+        self.setWindowTitle("JAV SCRAPER")
         self.resize(1150, 720)
         self.init_ui()
         self.apply_stylesheet()
@@ -178,12 +178,15 @@ class MainWindow(QMainWindow):
         self.btn_clear.setObjectName("ClearBtn")
         self.btn_remove_selected = QPushButton("移除所选")
         self.btn_remove_selected.setObjectName("RemoveSelectedBtn")
+        self.btn_retry_failed = QPushButton("重试失败")
+        self.btn_retry_failed.setObjectName("RetryFailedBtn")
         self.btn_import_dir = QPushButton("导入文件夹...")
         self.btn_import_dir.setObjectName("ImportDirBtn")
         self.btn_add_code = QPushButton("手动输入番号...")
         self.btn_add_code.setObjectName("AddCodeBtn")
         btn_row1_layout.addWidget(self.btn_clear)
         btn_row1_layout.addWidget(self.btn_remove_selected)
+        btn_row1_layout.addWidget(self.btn_retry_failed)
         btn_row1_layout.addWidget(self.btn_import_dir)
         btn_row1_layout.addWidget(self.btn_add_code)
         btn_control_layout.addLayout(btn_row1_layout)
@@ -208,30 +211,46 @@ class MainWindow(QMainWindow):
         right_panel.setFixedWidth(320)
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(12, 12, 12, 12)
-        right_layout.setSpacing(10)
+        right_layout.setSpacing(12)
 
         self.lbl_cover = QLabel("选择影片以预览海报")
         self.lbl_cover.setObjectName("CoverPreview")
         self.lbl_cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_cover.setFixedHeight(380)
+        self.lbl_cover.setFixedHeight(340)
         right_layout.addWidget(self.lbl_cover)
+
+        # 引入只读垂直详情滚动区，包裹所有文字、剧照与磁力链接，彻底从物理层解耦空间争抢
+        from PySide6.QtWidgets import QScrollArea
+        self.detail_scroll = QScrollArea()
+        self.detail_scroll.setObjectName("DetailScroll")
+        self.detail_scroll.setWidgetResizable(True)
+        self.detail_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.detail_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.detail_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.detail_scroll.setStyleSheet("background-color: transparent; border: none;")
+
+        detail_container = QWidget()
+        detail_container.setObjectName("DetailContainer")
+        detail_container.setStyleSheet("background-color: transparent;")
+        detail_container_layout = QVBoxLayout(detail_container)
+        detail_container_layout.setContentsMargins(0, 12, 0, 0)
+        detail_container_layout.setSpacing(10)
 
         self.lbl_info_title = QLabel("影片番号与标题")
         self.lbl_info_title.setObjectName("InfoTitle")
         self.lbl_info_title.setWordWrap(True)
-        right_layout.addWidget(self.lbl_info_title)
+        detail_container_layout.addWidget(self.lbl_info_title)
 
         self.lbl_info_details = QLabel("制片商: -\n发行日期: -\n演员: -")
         self.lbl_info_details.setObjectName("InfoDetails")
         self.lbl_info_details.setWordWrap(True)
-        right_layout.addWidget(self.lbl_info_details)
+        detail_container_layout.addWidget(self.lbl_info_details)
 
         # 剧照横向滚动区域
         self.lbl_samples_title = QLabel("影片预览剧照 (点击放大):")
         self.lbl_samples_title.setObjectName("SamplesTitle")
-        right_layout.addWidget(self.lbl_samples_title)
+        detail_container_layout.addWidget(self.lbl_samples_title)
 
-        from PySide6.QtWidgets import QScrollArea
         self.samples_scroll = QScrollArea()
         self.samples_scroll.setObjectName("SamplesScroll")
         self.samples_scroll.setWidgetResizable(True)
@@ -245,12 +264,12 @@ class MainWindow(QMainWindow):
         self.samples_layout.setSpacing(8)
         self.samples_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.samples_scroll.setWidget(self.samples_widget)
-        right_layout.addWidget(self.samples_scroll)
+        detail_container_layout.addWidget(self.samples_scroll)
 
         # 磁力链接展示区域
         self.lbl_magnet_title = QLabel("磁力链接 (点击复制):")
         self.lbl_magnet_title.setObjectName("MagnetTitle")
-        right_layout.addWidget(self.lbl_magnet_title)
+        detail_container_layout.addWidget(self.lbl_magnet_title)
 
         self.table_magnet = QTableWidget(0, 3)
         self.table_magnet.setHorizontalHeaderLabels(["大小", "日期", "操作"])
@@ -265,9 +284,12 @@ class MainWindow(QMainWindow):
         self.table_magnet.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table_magnet.verticalHeader().setVisible(False)
         self.table_magnet.horizontalHeader().setSectionsClickable(True)
-        right_layout.addWidget(self.table_magnet)
+        detail_container_layout.addWidget(self.table_magnet)
 
-        right_layout.addStretch()
+        detail_container_layout.addStretch()
+        self.detail_scroll.setWidget(detail_container)
+        
+        right_layout.addWidget(self.detail_scroll)
         main_layout.addWidget(right_panel)
 
         # 启用窗口拖入
@@ -389,6 +411,15 @@ class MainWindow(QMainWindow):
                 background-color: #3E3E3E;
                 border-color: #FF453A;
             }
+            #RetryFailedBtn {
+                background-color: #2E2E2E;
+                border: 1px solid #D4AF37;
+                color: #D4AF37;
+            }
+            #RetryFailedBtn:hover {
+                background-color: #3E3E3E;
+                color: #E5C158;
+            }
             #DropZone {
                 border: 2px dashed #444444;
                 border-radius: 8px;
@@ -424,7 +455,7 @@ class MainWindow(QMainWindow):
                 color: #8E8E93;
             }
             #InfoTitle {
-                font-size: 16px;
+                font-size: 13px;
                 color: #D4AF37;
                 font-weight: bold;
             }

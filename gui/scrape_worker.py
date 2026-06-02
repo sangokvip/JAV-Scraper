@@ -32,6 +32,9 @@ class ScrapeWorker(QRunnable):
                     self.signals.finished.emit(self.file_path, "未识别出番号，请双击补充。")
                     return
 
+                if ".." in self.code or "/" in self.code or "\\" in self.code:
+                    raise PermissionError(f"安全校验失败：检测到恶意番号或路径穿越符号 ({self.code})")
+
                 if self.cached_detail:
                     detail = self.cached_detail
                     self.signals.progress.emit(self.file_path, "使用已缓存的刮削数据...")
@@ -66,11 +69,17 @@ class ScrapeWorker(QRunnable):
                     return
 
                 # 2. 文件夹创建与非法字符处理
+                actors = detail.get("actors", [])
+                actor_name = actors[0].strip() if actors else "未知演员"
+                for char in r'\/:*?"<>|':
+                    actor_name = actor_name.replace(char, " ")
+                actor_name = actor_name.strip() or "未知演员"
+
                 clean_title = detail.get("title", "")
                 for char in r'\/:*?"<>|':
                     clean_title = clean_title.replace(char, " ")
-                folder_name = f"[{self.code}] {clean_title}"[:120].strip() # 限制最大长度
-                target_folder = os.path.join(self.output_dir, folder_name)
+                folder_name = f"[{self.code}] {clean_title}"[:60].strip() # 限制最大长度为安全的 60 字符 (防 255 字节文件系统 Invalid argument)
+                target_folder = os.path.join(self.output_dir, actor_name, folder_name)
                 
                 # 安全防御：防范路径穿越 (Path Traversal)，确保目标绝对路径在前缀包含范围内
                 abs_target = os.path.abspath(target_folder)
@@ -100,7 +109,16 @@ class ScrapeWorker(QRunnable):
 
                 # 如果源文件和目标文件不同，则进行移动
                 if os.path.exists(self.file_path) and os.path.abspath(self.file_path) != os.path.abspath(target_video_path):
-                    shutil.move(self.file_path, target_video_path)
+                    try:
+                        # 1. 尝试最直接的 os.rename
+                        os.rename(self.file_path, target_video_path)
+                    except Exception:
+                        # 2. 若失败(如跨分区或 exFAT 权限被拒)，采用免 copystat 的纯数据拷贝
+                        try:
+                            shutil.copyfile(self.file_path, target_video_path)
+                            os.remove(self.file_path)
+                        except Exception as move_err:
+                            raise OSError(move_err.errno if hasattr(move_err, 'errno') else 1, f"移动视频文件失败: {move_err}")
 
                 # 4. 写入元数据 NFO
                 self.signals.progress.emit(self.file_path, "正在生成元数据 NFO...")
@@ -166,6 +184,15 @@ class ScrapeWorker(QRunnable):
 
             except Exception as e:
                 traceback.print_exc()
-                self.signals.finished.emit(self.file_path, f"刮削异常: {str(e)}")
+                # 对常见的文件系统与硬件级别错误码进行温情化解释
+                err_msg = str(e)
+                if isinstance(e, OSError):
+                    if e.errno == 30: # Read-only file system
+                        err_msg = "磁盘已变为只读挂载状态，请重新插拔或检查读写权限"
+                    elif e.errno == 22: # Invalid argument
+                        err_msg = "文件名过长或路径格式不受当前磁盘文件系统支持"
+                    elif e.errno in (1, 13): # Operation not permitted / Permission denied
+                        err_msg = "文件正被其他程序(如播放器/下载器)锁定占用或无写入权限"
+                self.signals.finished.emit(self.file_path, f"整理异常: {err_msg}")
         finally:
             self.signals.finished_worker.emit(self)

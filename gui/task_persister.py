@@ -61,3 +61,31 @@ def load_tasks_backup(filepath: str = DEFAULT_BACKUP_PATH) -> dict:
     except Exception as e:
         print(f"加载任务备份失败: {e}")
         return {}
+
+DEFAULT_SETTINGS_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "settings_backup.json")
+)
+
+def save_settings_backup(settings: dict, filepath: str = DEFAULT_SETTINGS_PATH):
+    """
+    保存轻量系统设置（如保存目标路径）至本地 JSON。
+    """
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(settings, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"保存设置失败: {e}")
+
+def load_settings_backup(filepath: str = DEFAULT_SETTINGS_PATH) -> dict:
+    """
+    读取本地已存在的系统设置，不存在时返回空字典 {}。
+    """
+    if not os.path.exists(filepath):
+        return {}
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"加载设置失败: {e}")
+        return {}
+

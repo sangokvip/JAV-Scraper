@@ -1,388 +1,107 @@
-# JAVDB API Scraper
+# 🏷️ JAV SCRAPER
 
-JAVDB 视频平台 API 抓取工具，采用适配器模式设计，支持多种视频平台的统一接口访问。
+<div align="center">
+  <p><b>基于适配器模式的高性能、极速秒开、多线程异步 JAV 影片本地整理与元数据刮削利器</b></p>
+  <p>
+    <a href="#-开源协议"><img src="https://img.shields.io/badge/License-MIT-gold.svg" alt="License: MIT"></a>
+    <img src="https://img.shields.io/badge/Python-3.9+-yellow.svg" alt="Python Version">
+    <img src="https://img.shields.io/badge/GUI-PySide6--Platinum--Black-black.svg" alt="UI Theme">
+  </p>
+</div>
 
-📖 **[完整 API 文档](API_DOCUMENTATION.md)** - 详细的功能说明、参数、示例和返回格式
+---
 
-## 架构设计
+## 💎 软件视觉调性与特质
 
-```
-javdb-api-scraper/
-├── lib/                          # 核心库
-│   ├── __init__.py               # 库入口，导出所有公共接口
-│   ├── platform.py               # 平台枚举和ID处理
-│   ├── base_adapter.py           # 适配器基类
-│   ├── javdb_adapter.py          # JAVDB平台适配器
-│   ├── adapter_factory.py        # 适配器工厂
-│   ├── external_api.py           # 统一外部API接口
-│   ├── crypto_utils.py           # 加密/解密工具
-│   └── login.py                 # 登录功能
-├── test/                        # 测试目录
-│   ├── README.md                 # 测试说明
-│   └── verify_api.py            # API验证测试
-├── javdb_api.py                 # 原始JAVDB API实现
-├── config.example.py             # 配置示例
-├── third_party_config.json       # 第三方API配置
-├── requirements.txt              # 依赖
-└── README.md                    # 本文档
-```
+`JAV SCRAPER` 是一款专门为影迷用户精心雕琢的桌面级本地影片整理工具。我们秉持 **“白金黑杂志级极简艺术风格”**，从视觉到交互进行高规定制，全面终结粗制滥造的“AI 生成感”界面：
 
-## 快速开始
+* **哑光暗黑拟物美学**：全局采用极具质感的深邃太空黑（`#121212`）与极简白金白字（`#F5F5F7`）高对比度视觉，界面布局大气雅致。
+* **拟物金边胶囊徽章**：番号等核心数据被精心包装在微圆角、黄金边框（`#D4AF37`）的拟物胶囊内呈现，排版张弛有度，极具大厂报刊杂志的呼吸感。
+* **无边框详情滚动区**：海报大图巍峨置顶，其余详情字段则被包裹于无边框、支持惯性滚动的半透明区域内，物理上彻底根绝任何排版挤压与遮挡的悲剧。
 
-### 安装依赖
+---
+
+## ⚡ 核心顶级硬核技术架构
+
+为给大批量整理提供绝对不卡顿、顺滑如丝的操作响应，软件从底层构建了高规格的异步及缓存系统：
+
+1. **双池解耦异步并发架构 (Double-Pool Isolation)**：
+   * **刮削池 (Scrape Pool)**：专设独立 `QThreadPool` 执行后台刮削整理，并发数上限物理锁定为 3，防止因请求过载被平台风控拦截。
+   * **渲染池 (Render Pool)**：将右侧多媒体看板的图片网络加载（`ImageLoadWorker`）完全放行至全局线程池中多线程高并发运行，双池物理隔离、互不干扰。
+2. **0 毫秒秒开级 Pixmap 内存强引用缓存系统 (Pixmap Cache)**：
+   * 采用 `(图片物理路径或网络URL, 目标宽, 目标高)` 建立全局强引用高速缓存。
+   * 当在列表行上下切换时，缩放好的海报与剧照**0毫秒瞬间呈现**，彻底免去了任何重复的网络下载、大图磁盘读取和昂贵的 `SmoothTransformation` (平滑缩放) CPU 性能开销，体验行云流水！
+3. **域名广告前缀强力洗净与中文字幕自动纠偏**：
+   * 引入高精度域名水印清洗正则，瞬间剔除诸如 `hhd800.com@`、`www.xxx.com` 等发布站水印前缀，还原纯净番号。
+   * 智能识别数字后紧跟大/小写字母 `C` 的中文字幕标志（如 `CESD194C` -> `CESD-194`），并在大写自动修正时阻断信号，完全杜绝递归重入崩溃。
+4. **跨磁盘分区物理降级移动 (POSIX copystat Bypass)**：
+   * 自动绕开跨挂载外接盘（NTFS/exFAT格式）跨分区移动文件时由于 POSIX 元数据权限（ACL、Stat）写入被拒抛出的 PermissionError。
+   * 采用 `os.rename` 优先 + 自动平滑降级为免 copystat 的物理数据流拷贝 `shutil.copyfile` 与 `os.remove` 抹除组合，确保外接盘整理坚如磐石。
+5. **系统级硬件异常人性化中文翻译**：
+   * 整理落盘失败时绝不抛出冰冷复杂的 Python 堆栈，而是精准盘点 OSError 异常码并翻译为大白话：
+     * **Errno 30 (只读保护)**：*“磁盘已变为只读挂载状态，请重新插拔或检查读写权限”*
+     * **Errno 22 (非法或超长路径)**：*“文件名过长或路径格式不受当前磁盘文件系统支持”*
+     * **Errno 13/1 (文件锁定独占)**：*“文件正被其他程序(如播放器/下载器)锁定占用或无写入权限”*
+
+---
+
+## 🛠 快速开始
+
+### 1. 安装依赖
+
+确保您的系统已安装 Python 3.9+。在终端中运行以下命令安装必要的 GUI 框架和网络组件：
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 配置
+### 2. 启动应用
 
-1. 复制配置示例文件：
-```bash
-cp config.example.py config.py
-```
-
-2. 编辑 `config.py`，配置域名、超时时间等参数
-
-3. （可选）如需登录功能，配置账号密码
-
-### 使用统一 API 接口
-
-```python
-from lib import (
-    search_videos,
-    get_video_detail,
-    get_video_by_code,
-    search_actor,
-    get_actor_works,
-)
-
-# 搜索视频
-videos = search_videos("SSIS", max_pages=2)
-for video in videos:
-    print(f"{video['code']}: {video['title']}")
-
-# 获取视频详情
-detail = get_video_detail("YwG8Ve")
-print(f"标题: {detail['title']}")
-print(f"磁力链接: {detail['magnets']}")
-
-# 根据番号搜索
-detail = get_video_by_code("MIDA-583")
-print(f"标题: {detail['title']}")
-
-# 搜索演员
-actors = search_actor("井上もも")
-for actor in actors:
-    print(f"{actor['actor_name']}: {actor['actor_id']}")
-
-# 获取演员作品
-result = get_actor_works("0R1n3", max_pages=2)
-for work in result['works']:
-    print(f"{work['code']}: {work['title']}")
-```
-
-### 使用适配器模式
-
-```python
-from lib import AdapterFactory, Platform
-
-# 获取适配器
-adapter = AdapterFactory.get_adapter(Platform.JAVDB)
-
-# 使用适配器方法
-videos = adapter.search_videos("SSIS", max_pages=2)
-detail = adapter.get_video_detail("YwG8Ve")
-
-# 转换为标准格式
-data = adapter.convert_to_standard_format(videos)
-print(f"视频数: {len(data['videos'])}")
-print(f"标签数: {len(data['tags'])}")
-```
-
-### 使用加密功能
-
-```python
-from lib import CryptoUtils, DEFAULT_KEY
-
-# 加密数据
-encrypted = CryptoUtils.xor_encrypt("Hello, World!", DEFAULT_KEY)
-
-# 解密数据
-decrypted = CryptoUtils.xor_decrypt(encrypted, DEFAULT_KEY)
-
-# 加密文件
-CryptoUtils.encrypt_file("input.txt", "output.enc", DEFAULT_KEY)
-
-# 解密文件
-content = CryptoUtils.decrypt_file("output.enc", DEFAULT_KEY)
-```
-
-### 使用登录功能
-
-```python
-from lib import login, ensure_login
-
-# 登录（使用配置文件中的账号密码）
-success = login()
-
-# 自动登录（先尝试加载 cookies，过期则重新登录）
-success = ensure_login()
-```
-
-### 使用自动化登录（推荐）
-
-```python
-from lib import auto_login
-
-# 自动化登录（打开浏览器，手动登录后自动保存 cookies）
-success = auto_login(timeout=300)  # 等待 5 分钟
-
-# 流程：
-# 1. 自动打开浏览器，显示登录助手页面
-# 2. 在页面中点击按钮打开 JAVDB 登录页
-# 3. 在 JAVDB 中完成登录
-# 4. 从浏览器复制 cookies 并粘贴到助手页面
-# 5. 提交后自动保存到 cookies.json
-```
-
-### 演员作品标签筛选
-
-```python
-from javdb_api import JavdbAPI
-
-api = JavdbAPI()
-
-# 获取演员作品并按标签筛选
-result = api.get_actor_works_with_tags(
-    actor_id="NeOr",  # 永野一夏
-    tag_names=["美少女"],  # 按标签名称筛选
-    max_pages=1,
-    get_details=True,  # 获取详细信息（包含标签）
-    save_temp=True  # 保存到临时文件
-)
-
-print(f"总作品: {result['total_works']}")
-print(f"筛选后: {result['filtered_works']}")
-print(f"筛选标签: {result['tags']}")
-
-# 筛选后的作品
-for work in result['works']:
-    print(f"{work['code']}: {work['title']}")
-
-# 也可以使用标签 ID 筛选
-result = api.get_actor_works_with_tags(
-    actor_id="NeOr",
-    tag_ids=["c1=23", "c3=78"],  # 多标签组合
-    max_pages=1
-)
-
-# 临时文件机制：
-# - 首次运行会获取所有作品并保存到临时文件
-# - 后续运行会从临时文件加载，避免重复请求
-# - 如需重新获取，删除临时文件或使用不同的 temp_file 参数
-```
-
-## API 参考
-
-### 视频相关
-
-#### `search_videos(keyword, max_pages=1, platform=None)`
-搜索视频
-
-**参数:**
-- `keyword`: 搜索关键词
-- `max_pages`: 最大搜索页数
-- `platform`: 平台名称，默认使用配置中的默认平台
-
-**返回:** 视频列表
-
-#### `get_video_detail(video_id, platform=None)`
-获取视频详情
-
-**参数:**
-- `video_id`: 视频ID
-- `platform`: 平台名称
-
-**返回:** 视频详情字典
-
-#### `get_video_by_code(code, platform=None)`
-根据番号获取视频详情
-
-**参数:**
-- `code`: 番号（如 MIDA-583）
-- `platform`: 平台名称
-
-**返回:** 视频详情字典
-
-### 演员相关
-
-#### `search_actor(actor_name, platform=None)`
-搜索演员
-
-**参数:**
-- `actor_name`: 演员名字
-- `platform`: 平台名称
-
-**返回:** 演员列表
-
-#### `get_actor_works(actor_id, page=1, max_pages=1, full_detail=False, platform=None)`
-获取演员作品
-
-**参数:**
-- `actor_id`: 演员ID
-- `page`: 起始页码
-- `max_pages`: 最大页数
-- `full_detail`: 是否获取完整详情
-- `platform`: 平台名称
-
-**返回:** 作品列表和分页信息
-
-### 标签相关
-
-#### `get_tag_works(tag_id, page=1, max_pages=1, platform=None)`
-获取标签作品
-
-**参数:**
-- `tag_id`: 标签ID
-- `page`: 起始页码
-- `max_pages`: 最大页数
-- `platform`: 平台名称
-
-**返回:** 作品列表和分页信息
-
-#### `search_by_tags(page=1, max_pages=1, platform=None, **tag_params)`
-多标签组合搜索
-
-**参数:**
-- `page`: 起始页码
-- `max_pages`: 最大页数
-- `platform`: 平台名称
-- `**tag_params`: 标签参数，如 c1=23, c3=78
-
-**返回:** 作品列表和分页信息
-
-### 下载相关
-
-#### `download_video_images(video_id, download_dir=None, platform=None)`
-下载视频缩略图
-
-**参数:**
-- `video_id`: 视频ID
-- `download_dir`: 下载目录
-- `platform`: 平台名称
-
-**返回:** (成功下载数, 总数)
-
-### 数据转换
-
-#### `convert_to_standard_format(videos, platform=None)`
-将平台数据转换为系统标准格式
-
-**参数:**
-- `videos`: 视频数据列表
-- `platform`: 平台名称
-
-**返回:** 标准格式的视频和标签数据
-
-## 数据格式
-
-### 视频详情格式
-
-```python
-{
-    "video_id": "YwG8Ve",
-    "code": "MIDA-583",
-    "title": "作品标题",
-    "date": "2026-03-04",
-    "tags": ["美少女電影", "單體作品", "情侶"],
-    "actors": ["井上もも"],
-    "series": "系列名",
-    "magnets": [
-        {
-            "magnet": "magnet:?xt=urn:btih:...",
-            "size_text": "5.27GB",
-            "size_mb": 5396.48
-        }
-    ],
-    "thumbnail_images": [
-        "https://c0.jdbstatic.com/samples/yw/YwG8Ve_l_0.jpg",
-        ...
-    ],
-    "preview_video": "",
-    "cover_url": "https://c0.jdbstatic.com/covers/yw/YwG8Ve.jpg"
-}
-```
-
-### 标准格式
-
-```python
-{
-    "videos": [
-        {
-            "id": "JAVDB_YwG8Ve",
-            "video_id": "YwG8Ve",
-            "code": "MIDA-583",
-            "title": "作品标题",
-            "date": "2026-03-04",
-            "cover_path": "https://...",
-            "thumbnail_images": [...],
-            "magnets": [...],
-            "actors": ["井上もも"],
-            "series": "",
-            "rating": "4.57分",
-            "tag_ids": ["tag_001", "tag_002"],
-            "create_time": "2026-03-02T10:00:00",
-            "last_read_time": "2026-03-02T10:00:00",
-            "is_deleted": False
-        }
-    ],
-    "tags": [
-        {
-            "id": "tag_001",
-            "name": "美少女電影",
-            "create_time": "2026-03-02T10:00:00"
-        }
-    ]
-}
-```
-
-## 添加新平台
-
-要添加新的视频平台，需要：
-
-1. 在 `lib/platform.py` 中添加平台枚举
-2. 创建新的适配器类，继承 `BaseAdapter`
-3. 在 `lib/adapter_factory.py` 中注册适配器
-4. 在 `third_party_config.json` 中添加配置
-
-## 配置
-
-编辑 `config.py` 文件：
-
-```python
-JAVDB = {
-    'domains': ['javdb.com', 'javdb123.com'],
-    'timeout': 30,
-    'retry_times': 3,
-    'sleep_time': 0.5
-}
-
-LOGIN = {
-    'username': 'your_email@example.com',
-    'password': 'your_password'
-}
-```
-
-## 测试
-
-运行 API 验证测试：
+在项目根目录下直接运行主入口脚本：
 
 ```bash
-cd test
-python verify_api.py
+python3 main.py
 ```
 
-## 许可证
+### 3. 一分钟上手指南
 
-MIT License
+1. **设定目标路径**：点击左下角 **“浏览并选择路径...”** 选定您希望归档到的硬盘根目录（软件会自动记住选择，下次打开无需重复设定）。
+2. **填入 Cookie (可选)**：如果您有 JAVDB 账号，可直接粘贴 Cookie 字符串并点击 **“保存 Cookie”**。输入框内容会在输入时实时自动静默持久化，实现无缝登录体验。
+3. **导入视频**：
+   * **方法 A**：将任意视频文件或包含视频的文件夹，直接鼠标拖入中部的虚线金边提示区。
+   * **方法 B**：点击虚线提示区任一处，在弹出的文件浏览器中多选视频导入。
+   * **方法 C (虚拟刮削)**：点击 **“手动输入番号...”** 直接添加无视频的虚拟任务，仅刮削元数据、海报与剧照样品。
+4. **即时刮削与编辑**：
+   * 导入视频后，后台会在毫秒级内自动识别号码并在后台线程池中**自动拉起多线程刮削**，秒级呈现场景细节。
+   * 若提取不准确，可直接双击番号列，修改完成后按下回车，程序会**立刻自动为您拉起二次多线程刮削**。
+5. **一键整理落盘**：
+   * 点击底部醒目的金色 **“执行整理落盘”** 按钮。
+   * 软件会自动建立 `目标保存路径/首选主演/[番号] 标题/` 的树状二级归档，将视频重命名后进行物理移动，并在目标文件夹内生成标准的 Emby/Jellyfin 兼容 `.nfo` 元数据 XML 以及下载 `poster.jpg` 封面与并发拉取 8 线程剧照至 `extrafanart/` 目录！
+   * 整理成功后，点击列表行，右下角将自适应回显其**整理后物理绝对绝对路径**，一秒点击即可极速欣赏。
+6. **重试失败**：
+   * 若因为网络波动或硬件占用导致个别任务报错，点击控制栏的拟物金边 **“重试失败”** 按钮，一键瞬间让报错任务状态回归并重新投递回线程池再次执行！
+
+---
+
+## 🧪 开发者单元测试 (TDD)
+
+为确保任何逻辑修改不会对原业务产生 Regression 倒退隐患，我们在项目中部署了极为严密的 TDD 测试防护网。
+
+您可以在终端中直接运行全量测试，验证项目的极佳健康度：
+
+```bash
+python3 -m pytest -v
+```
+
+### 测试矩阵说明
+* `test_code_extractor.py`：高普适性番号洗净清洗提取测试，覆盖中文字幕 `CESD194C` -> `CESD-194` 的验证。
+* `test_task_persister.py`：设置、Cookie 以及任务队列的本地 JSON 加密/明文秒级容灾载入持久化测试。
+* `test_path_safety.py`：安全校验测试，完美拦截路径穿越穿越出保存目录的黑客行径。
+* `test_crash_prevention.py`：后台并发图片加载与 GC 主线程安全跨线程析构回收（SIGSEGV 段错误完美防护）测试。
+* `test_folder_cleaner.py`：归档完成后对原空父目录物理安全删除及系统敏感白名单目录保护测试。
+
+---
+
+## 📄 开源协议
+
+本项目基于 **[MIT License](LICENSE)** 协议开源。可免费用于个人本地娱乐或进行二次重构和优化。

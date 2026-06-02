@@ -1,6 +1,7 @@
 import os
 import json
 import requests
+import config
 from PySide6.QtCore import QThreadPool, Qt, Signal, QRunnable, QObject
 from PySide6.QtWidgets import QTableWidgetItem, QMessageBox, QFileDialog, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QPushButton, QProgressBar, QWidget, QMenu
 from PySide6.QtGui import QPixmap
@@ -202,7 +203,7 @@ class Controller:
         self.pixmap_cache = {}  # 缩放好的 QPixmap 强引用内存缓存系统：(path_or_url, w, h) -> QPixmap
 
         # 默认保存路径为项目根目录下的 output 文件夹
-        default_out = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "output"))
+        default_out = str(config.OUTPUT_DIR['root'])
         self.view.path_input.setText(default_out)
 
         # 信号槽绑定
@@ -849,9 +850,8 @@ class Controller:
             self.view.lbl_proxy_status.setStyleSheet("color: #FF453A;")
 
     def load_cookie_config(self):
-        import config
         import json
-        cookie_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", config.COOKIE_FILE))
+        cookie_path = config.COOKIE_FILE
         if os.path.exists(cookie_path):
             try:
                 with open(cookie_path, 'r', encoding='utf-8') as f:
@@ -876,7 +876,7 @@ class Controller:
                 k, v = item.split("=", 1)
                 cookies_dict[k.strip()] = v.strip()
 
-        cookie_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", config.COOKIE_FILE))
+        cookie_path = config.COOKIE_FILE
         try:
             import json
             with open(cookie_path, 'w', encoding='utf-8') as f:
@@ -897,7 +897,7 @@ class Controller:
                     k, v = item.split("=", 1)
                     cookies_dict[k.strip()] = v.strip()
         
-        cookie_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", config.COOKIE_FILE))
+        cookie_path = config.COOKIE_FILE
         try:
             with open(cookie_path, 'w', encoding='utf-8') as f:
                 json.dump(cookies_dict, f, indent=2)

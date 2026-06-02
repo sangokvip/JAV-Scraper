@@ -54,5 +54,15 @@ app = BUNDLE(
     coll,
     name='JAV SCRAPER.app',
     icon='icon.icns',
-    bundle_identifier=None,
+    bundle_identifier='com.sangokvip.javscraper',
+    info_plist={
+        'CFBundleDisplayName': 'JAV SCRAPER',
+        'CFBundleName': 'JAV SCRAPER',
+        'NSRequiresAquaSystemAppearance': 'No',
+        'NSDocumentsFolderUsageDescription': '需要访问文档文件夹以整理视频',
+        'NSDownloadsFolderUsageDescription': '需要访问下载文件夹以整理视频',
+        'NSDesktopFolderUsageDescription': '需要访问桌面文件夹以整理视频',
+        'NSNetworkVolumesUsageDescription': '需要访问网络共享卷（NAS 等）以整理您的影片和写入元数据',
+        'NSRemovableVolumesUsageDescription': '需要访问移动硬盘/U盘以整理您的影片和写入元数据',
+    }
 )

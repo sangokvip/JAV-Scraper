@@ -177,6 +177,14 @@ class ScrapeWorker(QRunnable):
                 self.signals.finished.emit(self.file_path, "success")
 
             except Exception as e:
+                import config
+                tb_str = traceback.format_exc()
+                try:
+                    log_path = os.path.expanduser("~/Desktop/jav_scraper_error.log")
+                    with open(log_path, "a", encoding="utf-8") as log_f:
+                        log_f.write(f"=== Error for {self.file_path} ===\n{tb_str}\n\n")
+                except Exception as log_err:
+                    print(f"写入 error.log 失败: {log_err}")
                 traceback.print_exc()
                 # 对常见的文件系统与硬件级别错误码进行温情化解释
                 err_msg = str(e)

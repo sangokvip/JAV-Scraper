@@ -101,14 +101,19 @@ HEADERS = {
     'Upgrade-Insecure-Requests': '1',
 }
 
-# Cookie 文件 — 优先使用 DATA_DIR 下用户手动放置/更新的版本，
-#              未找到时回退到 BUNDLE_DIR 下打包内嵌的初始版本。
+# Cookie 文件 — 必须始终放置在可读写的 DATA_DIR 下
+COOKIE_FILE = str(DATA_DIR / 'cookies.json')
+
+# 如果 DATA_DIR 下还没有 cookies.json，而 BUNDLE_DIR 下存在打包内嵌的 cookies.json，
+# 则在初始化时安全地将其复制到 DATA_DIR 下，以保证后续写操作正常。
 _cookie_user = DATA_DIR / 'cookies.json'
 _cookie_bundle = BUNDLE_DIR / 'cookies.json'
-if _cookie_user.exists():
-    COOKIE_FILE = str(_cookie_user)
-else:
-    COOKIE_FILE = str(_cookie_bundle)
+if not _cookie_user.exists() and _cookie_bundle.exists():
+    try:
+        import shutil
+        shutil.copyfile(str(_cookie_bundle), str(_cookie_user))
+    except Exception as e:
+        print(f"初始化复制 Cookie 文件失败: {e}")
 
 # 登录配置 - 请填入你的账号信息
 LOGIN = {

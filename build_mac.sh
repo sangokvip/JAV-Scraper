@@ -18,15 +18,7 @@ fi
 # 确保新安装的 pyinstaller 命令行工具在 PATH 中
 export PATH="/Users/mac/Library/Python/3.9/bin:$PATH"
 
-# 调用 pyinstaller 进行打包
-pyinstaller --noconfirm --onedir --windowed \
-  --name="JAV SCRAPER" \
-  --icon="icon.icns" \
-  --add-data="third_party_config.json:." \
-  --add-data="cookies.json:." \
-  --add-data="lib:lib" \
-  --add-data="gui:gui" \
-  --collect-all curl_cffi \
-  main.py
+# 调用 pyinstaller 进行打包 (使用已定制 Info.plist 的 spec 配置文件以注入 macOS 隐私权限描述)
+pyinstaller --noconfirm "JAV SCRAPER.spec"
 
 echo "macOS 打包成功，打包文件生成于 dist/ 目录。"

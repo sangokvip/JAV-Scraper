@@ -611,6 +611,41 @@
   - 在 `config.py` 中实现了 `BUNDLE_DIR` (只读内嵌资源) 和 `DATA_DIR` (可写用户目录) 的分离。
   - 在 `lib/external_api.py` 中更新了 `third_party_config.json` 的加载与存储逻辑，允许从 `DATA_DIR` 加载，并在不存在时回退到 `BUNDLE_DIR`。
 - **风险自查**:
-  - 确保向后兼容，开发环境和构建环境路径现在逻辑一致。
+  - 确保向后兼容，开发环境 and 构建环境路径现在逻辑一致。
 - **回滚点**:
   - `git checkout HEAD~1 config.py lib/external_api.py`
+
+### 11) Fix: 解决打包后默认输出路径及 Cookie 写入引发的 Read-only file system 异常
+- **变更文件**: `config.py`、`gui/controller.py`
+- **背景与目标**: 修复打包后，因 GUI 中默认保存路径和 Cookie 保存文件指向 `sys._MEIPASS`（包内只读目录）而导致写入时触发 `OSError (Errno 30) Read-only file system`，回显为“磁盘已变为只读挂载状态”的问题。
+- **技术实施**:
+  - 在 `config.py` 中，将 `COOKIE_FILE` 设置为始终指向外部可读写的 `DATA_DIR`。并在初始化时，如果 `DATA_DIR` 中没有 `cookies.json`，自动从包内 `BUNDLE_DIR` 复制一份到 `DATA_DIR`，确保写操作合法。
+  - 在 `gui/controller.py` 中，将默认输出保存路径 `default_out` 更改为引用已校准的 `config.OUTPUT_DIR['root']`，消除对 `_MEIPASS` 内部 `output` 文件夹的只读写入行为。
+  - 在 `gui/controller.py` 中，直接使用 `config.COOKIE_FILE` 作为 `cookie_path` 赋值，消除冗余且会导致路径偏移的 `os.path.join` 拼接。
+- **风险自查**:
+  - 经过修改，本地开发环境和 PyInstaller 打包环境中的读写行为被严格区分为“包内只读”与“包外读写”，不会再发生 Errno 30 只读挂载报错。
+- **回滚点**:
+  - `git checkout HEAD -- config.py gui/controller.py`
+
+### 12) Fix: 引入 macOS 外部卷 TCC 隐私权限描述以解决外接盘/NAS 整理时 Errno 30 阻断
+- **变更文件**: `JAV SCRAPER.spec`、`build_mac.sh`
+- **背景与目标**: 解决用户将目标整理路径或虚拟任务保存路径设在外部磁盘或挂载的网络文件夹（如 `/Volumes/homes/`）下时，由于打包后的应用缺少 macOS 隐私权限描述（TCC），导致 macOS 默默拒绝写入并抛出 Errno 30 只读挂载错误的问题。
+- **技术实施**:
+  - 在 `JAV SCRAPER.spec` 文件的 `BUNDLE` 定义中，增加 `info_plist` 字典。配置 `NSNetworkVolumesUsageDescription`（网络卷访问描述）和 `NSRemovableVolumesUsageDescription`（移动硬盘访问描述）等描述，告知系统应用将需要外部磁盘和网络磁盘读写权限。
+  - 在 `build_mac.sh` 中，将 PyInstaller 编译命令修改为直接使用 `JAV SCRAPER.spec` 进行编译打包，以确保定制 the `Info.plist` 全局隐私权限项被正确编译嵌入。
+- **风险自查**:
+  - 当重新运行打包的 App 并尝试访问 `/Volumes/` 下的外接驱动器或 NAS 挂载路径时，macOS 会正常弹出“是否允许访问外接磁盘/网络磁盘”提示框。用户批准后读写将彻底畅通。
+- **回滚点**:
+  - `git checkout HEAD -- JAV\ SCRAPER.spec build_mac.sh`
+
+### 13) Fix: 解决打包运行 CWD 飘移至系统根目录 / 引发默认 output/ 写入只读阻断
+- **变更文件**: `utils.py`
+- **背景与目标**: 修复打包后从 Finder 双击运行时，由于当前工作目录（CWD）为系统根目录 `/`，导致 `JSONExporter`、`MagnetExporter` 和 `ImageDownloader` 默认初始化的相对路径 `output/...` 被解析为 `/output/...`，进而由于写入系统根盘无权限触发 `OSError (Errno 30) Read-only file system` 阻断的问题。
+- **技术实施**:
+  - 重构 `utils.py` 中的 `JSONExporter.__init__`、`MagnetExporter.__init__` 及 `ImageDownloader` 下的所有下载方法。
+  - 将硬编码的 `"output/json"`、`"output/images"`、`"output/magnets"` 相对路径默认值变更为引用 `config.OUTPUT_DIR`。
+  - 运行时动态判断，若未指定自定义输出路径，则通过绝对物理路径将默认数据落盘完全引导在可写的外置 `DATA_DIR / 'output'` 目录内，杜绝向 `/output` 的越权写入。
+- **风险自查**:
+  - 完美兼容 CLI 环境和 PyInstaller 包体运行态，解决了双击运行时 CWD 偏移引发的所有写入冲突。
+- **回滚点**:
+  - `git checkout HEAD -- utils.py`

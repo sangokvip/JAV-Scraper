@@ -14,7 +14,10 @@ from bs4 import BeautifulSoup
 class JSONExporter:
     """JSON 数据导出器"""
     
-    def __init__(self, output_dir: str = "output/json"):
+    def __init__(self, output_dir: str = None):
+        if output_dir is None:
+            import config
+            output_dir = config.OUTPUT_DIR['json']
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
@@ -54,7 +57,7 @@ class ImageDownloader:
         self.session = session
     
     def download_thumbnails(self, code: str, image_urls: List[str], 
-                           output_dir: str = "output/images"):
+                           output_dir: str = None):
         """
         下载缩略图
         
@@ -63,6 +66,9 @@ class ImageDownloader:
             image_urls: 图片URL列表
             output_dir: 输出目录
         """
+        if output_dir is None:
+            import config
+            output_dir = config.OUTPUT_DIR['images']
         video_dir = Path(output_dir) / code
         video_dir.mkdir(parents=True, exist_ok=True)
         
@@ -104,6 +110,9 @@ class ImageDownloader:
                 'files': [下载的文件路径列表]
             }
         """
+        if output_dir is None:
+            import config
+            output_dir = config.OUTPUT_DIR['images']
         video_dir = Path(output_dir) / video_id
         video_dir.mkdir(parents=True, exist_ok=True)
         
@@ -150,7 +159,10 @@ class ImageDownloader:
 class MagnetExporter:
     """磁力链接导出器"""
     
-    def __init__(self, output_dir: str = "output/magnets"):
+    def __init__(self, output_dir: str = None):
+        if output_dir is None:
+            import config
+            output_dir = config.OUTPUT_DIR['magnets']
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
     

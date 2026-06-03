@@ -4,6 +4,8 @@ import traceback
 import requests
 from PySide6.QtCore import QRunnable, QObject, Signal
 from lib import AdapterFactory
+from helpers.subtitle_helper import find_matching_subtitles, move_and_rename_subtitles
+from helpers.template_helper import format_target_path
 
 class WorkerSignals(QObject):
     started = Signal(str)           # filepath
@@ -13,7 +15,10 @@ class WorkerSignals(QObject):
     finished_worker = Signal(object) # worker object itself
 
 class ScrapeWorker(QRunnable):
-    def __init__(self, file_path: str, code: str, output_dir: str, platform: str, proxies: dict = None, only_scrape: bool = False, cached_detail: dict = None):
+    def __init__(self, file_path: str, code: str, output_dir: str, platform: str, proxies: dict = None, 
+                 only_scrape: bool = False, cached_detail: dict = None, extra_files: list = None,
+                 rename_template: str = "{actor}/{[code]} {title}", download_samples: bool = True,
+                 write_subtitle_tag: bool = True, conflict_resolution: str = "keep_both"):
         super().__init__()
         self.file_path = file_path
         self.code = code
@@ -22,6 +27,11 @@ class ScrapeWorker(QRunnable):
         self.proxies = proxies
         self.only_scrape = only_scrape
         self.cached_detail = cached_detail
+        self.extra_files = extra_files if extra_files is not None else []
+        self.rename_template = rename_template
+        self.download_samples = download_samples
+        self.write_subtitle_tag = write_subtitle_tag
+        self.conflict_resolution = conflict_resolution
         self.signals = WorkerSignals()
 
     def run(self):
@@ -39,43 +49,48 @@ class ScrapeWorker(QRunnable):
                     detail = self.cached_detail
                     self.signals.progress.emit(self.file_path, "使用已缓存的刮削数据...")
                 else:
-                    self.signals.progress.emit(self.file_path, "正在从平台刮削数据...")
-                    
-                    # 清除旧的单例缓存，保证最新的代理/Cookie配置生效
-                    AdapterFactory.clear_instance()
-                    
-                    adapter = AdapterFactory.get_adapter_by_name("javdb", proxies=self.proxies)
-                    detail = adapter.get_video_by_code(self.code)
+                    detail = None
+                    try:
+                        self.signals.progress.emit(self.file_path, "正在从 JAVDB 平台刮削数据...")
+                        AdapterFactory.clear_instance()
+                        adapter = AdapterFactory.get_adapter_by_name(
+                            "javdb", 
+                            proxies=self.proxies
+                        )
+                        detail = adapter.get_video_by_code(self.code)
+                    except Exception as scrape_err:
+                        print(f"[JAVDB] 刮削过程中发生网络异常: {scrape_err}")
+
+                    # 若 JAVDB 刮削失败或返回空，降级回退至 JAV321 直连
+                    if not detail:
+                        try:
+                            self.signals.progress.emit(self.file_path, "JAVDB 刮削失败，正在降级回退至 JAV321 (直连)...")
+                            AdapterFactory.clear_instance()
+                            adapter_fallback = AdapterFactory.get_adapter_by_name("jav321", proxies=self.proxies)
+                            detail = adapter_fallback.get_video_by_code(self.code)
+                            if detail:
+                                self.signals.progress.emit(self.file_path, "成功从 JAV321 平台获取到刮削数据。")
+                        except Exception as fallback_err:
+                            print(f"[JAV321] 降级刮削也失败: {fallback_err}")
 
                 if not detail:
                     self.signals.finished.emit(self.file_path, f"在平台中找不到番号: {self.code}")
                     return
 
-                # 若不是手动输入的虚拟任务，则将磁力列表置空，不显示磁力
                 if not self.file_path.startswith("__virtual__:"):
                     detail["magnets"] = []
 
-                # 发送预览加载信号，供主界面渲染详情卡片
                 self.signals.preview_loaded.emit(self.file_path, detail)
 
                 if self.only_scrape:
                     self.signals.finished.emit(self.file_path, "scrape_success")
                     return
 
-                # 2. 文件夹创建与非法字符处理
-                actors = detail.get("actors", [])
-                actor_name = actors[0].strip() if actors else "未知演员"
-                for char in r'\/:*?"<>|':
-                    actor_name = actor_name.replace(char, " ")
-                actor_name = actor_name.strip() or "未知演员"
-
-                clean_title = detail.get("title", "")
-                for char in r'\/:*?"<>|':
-                    clean_title = clean_title.replace(char, " ")
-                folder_name = f"[{self.code}] {clean_title}"[:60].strip() # 限制最大长度为安全的 60 字符 (防 255 字节文件系统 Invalid argument)
-                target_folder = os.path.join(self.output_dir, actor_name, folder_name)
+                # 2. 根据模板计算目标文件夹绝对路径
+                self.signals.progress.emit(self.file_path, "正在生成归档路径...")
+                target_folder = format_target_path(self.rename_template, self.output_dir, self.code, detail)
                 
-                # 安全防御：防范路径穿越 (Path Traversal)，确保目标绝对路径在前缀包含范围内
+                # 安全防御
                 abs_target = os.path.abspath(target_folder)
                 abs_output = os.path.abspath(self.output_dir)
                 if not abs_target.startswith(abs_output):
@@ -83,52 +98,94 @@ class ScrapeWorker(QRunnable):
                     
                 os.makedirs(target_folder, exist_ok=True)
 
-                # 3. 移动并重命名视频文件
-                self.signals.progress.emit(self.file_path, "正在移动与重命名影片...")
-                ext = os.path.splitext(self.file_path)[1]
-                
-                # 多CD检测
-                cd_suffix = ""
-                for cd_keyword in ["-cd1", "-cd2", "-cd3", "_cd1", "_cd2", "_a", "_b"]:
-                    if cd_keyword in os.path.basename(self.file_path).lower():
-                        cd_suffix = cd_keyword.upper().replace("_", "-")
-                        break
-                target_video_name = f"{self.code}{cd_suffix}{ext}"
-                target_video_path = os.path.join(target_folder, target_video_name)
+                # 3. 处理字幕和重命名整理
+                has_subtitle_file = False
+                video_files = []
+                if not self.file_path.startswith("__virtual__:"):
+                    video_files = [self.file_path] + self.extra_files
+                    # 过滤掉物理不存在的文件
+                    video_files = [f for f in video_files if os.path.exists(f)]
+                    video_files.sort() # 保证 -cd1, -cd2 顺序稳定
 
-                # 安全验证：确保视频写入绝对路径前缀被限制在 output_dir 下
-                abs_video = os.path.abspath(target_video_path)
-                if not abs_video.startswith(abs_output):
-                    raise PermissionError(f"安全校验失败：视频写路径试图跳出根保存目录 ({abs_video})")
+                if video_files:
+                    self.signals.progress.emit(self.file_path, "正在移动与重命名影片及外挂字幕...")
+                    
+                    for idx, v_path in enumerate(video_files):
+                        ext = os.path.splitext(v_path)[1]
+                        
+                        # 查找外挂字幕
+                        subs = find_matching_subtitles(v_path)
+                        if subs:
+                            has_subtitle_file = True
+                            
+                        # 智能多 CD 命名规则
+                        cd_suffix = ""
+                        # 先尝试匹配原文件名中已有的分段标记
+                        for cd_keyword in ["-cd1", "-cd2", "-cd3", "_cd1", "_cd2", "_a", "_b"]:
+                            if cd_keyword in os.path.basename(v_path).lower():
+                                cd_suffix = cd_keyword.upper().replace("_", "-")
+                                break
+                        # 如果没有分段标记但确实有多个视频，按索引分段
+                        if not cd_suffix and len(video_files) > 1:
+                            cd_suffix = f"-CD{idx+1}"
+                            
+                        target_video_name = f"{self.code}{cd_suffix}{ext}"
+                        target_video_path = os.path.join(target_folder, target_video_name)
+                        
+                        # 冲突检验与解决
+                        if os.path.exists(target_video_path):
+                            if self.conflict_resolution == "skip":
+                                continue
+                            elif self.conflict_resolution == "only_meta":
+                                pass # 不移动视频，继续往下做元数据写入
+                            elif self.conflict_resolution == "keep_both":
+                                # 附带副本后缀
+                                target_video_name = f"{self.code}{cd_suffix}_副本{ext}"
+                                target_video_path = os.path.join(target_folder, target_video_name)
+                            elif self.conflict_resolution == "overwrite":
+                                try:
+                                    os.remove(target_video_path)
+                                except Exception:
+                                    pass
 
-                # 如果源文件和目标文件不同，则进行移动
-                if os.path.exists(self.file_path) and os.path.abspath(self.file_path) != os.path.abspath(target_video_path):
-                    try:
-                        # 1. 尝试最直接的 os.rename
-                        os.rename(self.file_path, target_video_path)
-                    except Exception:
-                        # 2. 若失败(如跨分区或 exFAT 权限被拒)，采用免 copystat 的纯数据拷贝
-                        try:
-                            shutil.copyfile(self.file_path, target_video_path)
-                            os.remove(self.file_path)
-                        except Exception as move_err:
-                            raise OSError(move_err.errno if hasattr(move_err, 'errno') else 1, f"移动视频文件失败: {move_err}")
+                        # 执行物理移动或拷贝
+                        if self.conflict_resolution != "only_meta" and os.path.abspath(v_path) != os.path.abspath(target_video_path):
+                            try:
+                                os.rename(v_path, target_video_path)
+                            except Exception:
+                                try:
+                                    shutil.copyfile(v_path, target_video_path)
+                                    os.remove(v_path)
+                                except Exception as move_err:
+                                    raise OSError(move_err.errno if hasattr(move_err, 'errno') else 1, f"移动视频失败: {move_err}")
+                        
+                        # 同步移动外挂字幕
+                        if subs:
+                            move_and_rename_subtitles(v_path, target_video_path, subs)
 
                 # 4. 写入元数据 NFO
                 self.signals.progress.emit(self.file_path, "正在生成元数据 NFO...")
                 nfo_path = os.path.join(target_folder, f"{self.code}.nfo")
                 
-                # 安全验证：确保 NFO 写入绝对路径前缀被限制在 output_dir 下
                 abs_nfo = os.path.abspath(nfo_path)
                 if not abs_nfo.startswith(abs_output):
                     raise PermissionError(f"安全校验失败：NFO 写路径试图跳出根保存目录 ({abs_nfo})")
+                
+                # 是否判定为中文字幕
+                is_chinese_sub = False
+                if self.code.endswith("C") or "中文字幕" in detail.get("tags", []) or has_subtitle_file:
+                    is_chinese_sub = True
+                    
+                tags = list(detail.get("tags", []))
+                if is_chinese_sub and self.write_subtitle_tag and "中文字幕" not in tags:
+                    tags.append("中文字幕")
                 
                 nfo_data = {
                     "code": self.code,
                     "title": detail.get("title", ""),
                     "date": detail.get("date", ""),
                     "studio": detail.get("series", "") or detail.get("maker", "") or detail.get("publisher", "") or detail.get("producer", ""),
-                    "tags": detail.get("tags", []),
+                    "tags": tags,
                     "actors": detail.get("actors", []),
                     "plot": ""
                 }
@@ -144,9 +201,9 @@ class ScrapeWorker(QRunnable):
                         with open(os.path.join(target_folder, "poster.jpg"), "wb") as f:
                             f.write(r.content)
 
-                # 6. 并发下载样品预览图并存放至 extrafanart/
+                # 6. 下载样品预览图 (根据偏好设置控制)
                 thumbnails = detail.get("thumbnail_images", [])
-                if thumbnails:
+                if thumbnails and self.download_samples:
                     self.signals.progress.emit(self.file_path, f"正在下载预览图 (0/{len(thumbnails)})...")
                     extrafanart_dir = os.path.join(target_folder, "extrafanart")
                     os.makedirs(extrafanart_dir, exist_ok=True)
@@ -156,7 +213,6 @@ class ScrapeWorker(QRunnable):
                     def download_image(args):
                         idx, img_url = args
                         try:
-                            # 单张剧照超时时间从 30s 减少到 8s，防止由于单张失效死图阻塞全局
                             r = requests.get(img_url, timeout=8, proxies=self.proxies)
                             if r.status_code == 200:
                                 img_path = os.path.join(extrafanart_dir, f"fanart{idx+1}.jpg")
@@ -177,7 +233,6 @@ class ScrapeWorker(QRunnable):
                 self.signals.finished.emit(self.file_path, "success")
 
             except Exception as e:
-                import config
                 tb_str = traceback.format_exc()
                 try:
                     log_path = os.path.expanduser("~/Desktop/jav_scraper_error.log")
@@ -186,14 +241,14 @@ class ScrapeWorker(QRunnable):
                 except Exception as log_err:
                     print(f"写入 error.log 失败: {log_err}")
                 traceback.print_exc()
-                # 对常见的文件系统与硬件级别错误码进行温情化解释
+                
                 err_msg = str(e)
                 if isinstance(e, OSError):
-                    if e.errno == 30: # Read-only file system
+                    if e.errno == 30:
                         err_msg = "磁盘已变为只读挂载状态，请重新插拔或检查读写权限"
-                    elif e.errno == 22: # Invalid argument
+                    elif e.errno == 22:
                         err_msg = "文件名过长或路径格式不受当前磁盘文件系统支持"
-                    elif e.errno in (1, 13): # Operation not permitted / Permission denied
+                    elif e.errno in (1, 13):
                         err_msg = "文件正被其他程序(如播放器/下载器)锁定占用或无写入权限"
                 self.signals.finished.emit(self.file_path, f"整理异常: {err_msg}")
         finally:

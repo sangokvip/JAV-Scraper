@@ -23,6 +23,7 @@ def generate_nfo(data: dict, output_path: str):
     # 标签
     for tag in data.get("tags", []):
         ET.SubElement(root, "genre").text = tag
+        ET.SubElement(root, "tag").text = tag
         
     # 演员
     for actor_name in data.get("actors", []):

@@ -1,26 +1,14 @@
 import os
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QTableWidget,
-    QTableWidgetItem, QPushButton, QLabel, QLineEdit, QTextEdit,
+    QTableWidgetItem, QPushButton, QLabel, QLineEdit,
     QFileDialog, QAbstractItemView, QHeaderView, QRadioButton, QButtonGroup,
     QCheckBox
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
-
-class TaskTableWidget(QTableWidget):
-    delete_pressed = Signal()
-    def keyPressEvent(self, event):
-        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
-            self.delete_pressed.emit()
-        else:
-            super().keyPressEvent(event)
-
-class ClickableDropLabel(QLabel):
-    clicked = Signal()
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit()
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPixmap, QIcon
+from gui.widgets import TaskTableWidget, ClickableDropLabel
+from gui.styles import STYLE_SHEET
 
 class MainWindow(QMainWindow):
     files_dropped = Signal(list)  # 拖入的文件路径列表
@@ -29,13 +17,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("JAV SCRAPER")
         
-        # 设置窗口图标
-        from PySide6.QtGui import QIcon
         icon_path = os.path.join(os.path.dirname(__file__), "icon.png")
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
             
-        self.resize(1150, 720)
+        self.resize(1180, 750)
         self.init_ui()
         self.apply_stylesheet()
 
@@ -50,12 +36,26 @@ class MainWindow(QMainWindow):
         # ================== 左侧：配置区 ==================
         left_panel = QWidget()
         left_panel.setObjectName("LeftPanel")
-        left_panel.setFixedWidth(260)
+        left_panel.setFixedWidth(270)
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(12, 12, 12, 12)
         left_layout.setSpacing(10)
 
-
+        # ⚠️ VPN 必要性提示
+        vpn_notice = QLabel("⚠️  刮削需要 VPN 代理\n请确保已开启 VPN，否则无法连接至 JAVDB。")
+        vpn_notice.setObjectName("VpnNoticeLabel")
+        vpn_notice.setWordWrap(True)
+        vpn_notice.setStyleSheet(
+            "background-color: rgba(255, 89, 36, 0.12);"
+            "color: #FF5924;"
+            "border: 1px solid rgba(255, 89, 36, 0.4);"
+            "border-radius: 6px;"
+            "padding: 8px 10px;"
+            "font-size: 11px;"
+            "font-weight: 500;"
+            "line-height: 1.5;"
+        )
+        left_layout.addWidget(vpn_notice)
 
         # 代理设置
         left_layout.addWidget(QLabel("代理设置 (SOCKS5/HTTP):"))
@@ -91,14 +91,36 @@ class MainWindow(QMainWindow):
                 self.lbl_proxy_status.setStyleSheet("color: #FF5924;")
         self.chk_custom_proxy.toggled.connect(update_proxy_status_label)
 
-        # Cookie 导入
-        left_layout.addWidget(QLabel("JAVDB Cookie (可选):"))
-        self.cookie_input = QTextEdit()
-        self.cookie_input.setPlaceholderText("在此粘贴 JAVDB 网页登录后的 Cookie 字符串...")
-        self.cookie_input.setFixedHeight(120)
+        # Cookie 导入 — 单行输入 + 行内保存按钮
+        cookie_row_layout = QHBoxLayout()
+        cookie_row_layout.setSpacing(6)
+        cookie_label = QLabel("JAVDB Cookie (可选):")
+        cookie_row_layout.addWidget(cookie_label)
+        cookie_row_layout.addStretch()
+        self.btn_save_cookie = QPushButton("保存")
+        self.btn_save_cookie.setObjectName("SaveCookieInlineBtn")
+        self.btn_save_cookie.setFixedHeight(22)
+        self.btn_save_cookie.setStyleSheet(
+            "QPushButton#SaveCookieInlineBtn {"
+            "  background-color: transparent;"
+            "  border: 1px solid #E5EAF2;"
+            "  border-radius: 10px;"
+            "  padding: 2px 10px;"
+            "  font-size: 11px;"
+            "  color: #4A5465;"
+            "  font-weight: 600;"
+            "}"
+            "QPushButton#SaveCookieInlineBtn:hover {"
+            "  border-color: #FF5924;"
+            "  color: #FF5924;"
+            "}"
+        )
+        cookie_row_layout.addWidget(self.btn_save_cookie)
+        left_layout.addLayout(cookie_row_layout)
+        self.cookie_input = QLineEdit()
+        self.cookie_input.setPlaceholderText("粘贴 JAVDB Cookie...")
+        self.cookie_input.setEchoMode(QLineEdit.EchoMode.Password)
         left_layout.addWidget(self.cookie_input)
-        self.btn_save_cookie = QPushButton("保存 Cookie")
-        left_layout.addWidget(self.btn_save_cookie)
 
         # 保存路径
         left_layout.addWidget(QLabel("保存目标路径:"))
@@ -108,11 +130,73 @@ class MainWindow(QMainWindow):
         self.btn_browse = QPushButton("浏览并选择路径...")
         left_layout.addWidget(self.btn_browse)
 
+        # 高级命名模板
+        left_layout.addWidget(QLabel("归档命名模板:"))
+        self.tmpl_input = QLineEdit("{actor}/{[code]} {title}")
+        self.tmpl_input.setObjectName("TemplateInput")
+        left_layout.addWidget(self.tmpl_input)
+
+        # 变量芯片（点击自动插入光标处）
+        chip_vars = [
+            ("{actor}", "主演"),
+            ("{studio}", "片商"),
+            ("{code}", "番号"),
+            ("{title}", "标题"),
+            ("{year}", "年份"),
+            ("{date}", "日期"),
+        ]
+        chip_row1 = QHBoxLayout()
+        chip_row1.setSpacing(4)
+        chip_row1.setContentsMargins(0, 0, 0, 0)
+        chip_row2 = QHBoxLayout()
+        chip_row2.setSpacing(4)
+        chip_row2.setContentsMargins(0, 0, 0, 0)
+        chip_style = (
+            "QPushButton {"
+            "  background-color: rgba(255,89,36,0.08);"
+            "  border: 1px solid rgba(255,89,36,0.35);"
+            "  border-radius: 10px;"
+            "  padding: 2px 8px;"
+            "  font-size: 11px;"
+            "  color: #FF5924;"
+            "  font-weight: 600;"
+            "}"
+            "QPushButton:hover {"
+            "  background-color: rgba(255,89,36,0.18);"
+            "  border-color: #FF5924;"
+            "}"
+        )
+        for i, (var, label) in enumerate(chip_vars):
+            chip_btn = QPushButton(f"{label}")
+            chip_btn.setToolTip(f"点击插入 {var}")
+            chip_btn.setStyleSheet(chip_style)
+            chip_btn.setFixedHeight(22)
+            chip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            chip_btn.clicked.connect(lambda _, v=var: self._insert_template_var(v))
+            if i < 3:
+                chip_row1.addWidget(chip_btn)
+            else:
+                chip_row2.addWidget(chip_btn)
+        chip_row1.addStretch()
+        chip_row2.addStretch()
+        left_layout.addLayout(chip_row1)
+        left_layout.addLayout(chip_row2)
+
+        # 整理首选项
+        left_layout.addWidget(QLabel("整理首选项:"))
+        self.chk_download_samples = QCheckBox("下载影片剧照 (Sample Photos)")
+        self.chk_download_samples.setChecked(True)
+        left_layout.addWidget(self.chk_download_samples)
+        
+        self.chk_subtitle_tag = QCheckBox("在 NFO 中写入中文字幕标签")
+        self.chk_subtitle_tag.setChecked(True)
+        left_layout.addWidget(self.chk_subtitle_tag)
+
         # 所有权展示与免责声明
         self.lbl_copyright = QLabel(
-            "<div style='text-align: center; margin-top: 15px; border-top: 1px solid #E5EAF2; padding-top: 12px;'>"
-            "  <div style='color: #748297; font-size: 11px; margin-bottom: 4px;'><b>所有权归属</b></div>"
-            "  <div style='color: #FF5924; font-size: 11px; font-weight: bold; margin-bottom: 6px;'>"
+            "<div style='text-align: center; margin-top: 10px; border-top: 1px solid #E5EAF2; padding-top: 8px;'>"
+            "  <div style='color: #748297; font-size: 11px; margin-bottom: 2px;'><b>所有权归属</b></div>"
+            "  <div style='color: #FF5924; font-size: 11px; font-weight: bold; margin-bottom: 4px;'>"
             "    <a href='https://github.com/sangokvip/JAV-Scraper' style='color: #FF5924; text-decoration: none;'>GitHub: JAV-Scraper</a>"
             "  </div>"
             "  <div style='color: #748297; font-size: 10px; line-height: 1.4;'>"
@@ -140,6 +224,55 @@ class MainWindow(QMainWindow):
         self.drop_label.setFixedHeight(100)
         self.drop_label.setCursor(Qt.CursorShape.PointingHandCursor)
         center_layout.addWidget(self.drop_label)
+
+        # === 搜索过滤栏 ===
+        self.filter_widget = QWidget()
+        self.filter_widget.setObjectName("FilterWidget")
+        filter_layout = QHBoxLayout(self.filter_widget)
+        filter_layout.setContentsMargins(0, 5, 0, 5)
+        filter_layout.setSpacing(8)
+        
+        self.search_input = QLineEdit()
+        self.search_input.setObjectName("SearchInput")
+        self.search_input.setPlaceholderText("🔍 输入文件名或番号进行过滤...")
+        filter_layout.addWidget(self.search_input, stretch=1)
+        
+        self.filter_group = QButtonGroup(self)
+        self.filter_group.setExclusive(True)
+        self.btn_filter_all = QPushButton("全部")
+        self.btn_filter_all.setCheckable(True)
+        self.btn_filter_all.setProperty("class", "PillFilter")
+        self.btn_filter_all.setChecked(True)
+        
+        self.btn_filter_pending = QPushButton("待整理")
+        self.btn_filter_pending.setCheckable(True)
+        self.btn_filter_pending.setProperty("class", "PillFilter")
+        
+        self.btn_filter_running = QPushButton("进行中")
+        self.btn_filter_running.setCheckable(True)
+        self.btn_filter_running.setProperty("class", "PillFilter")
+        
+        self.btn_filter_success = QPushButton("已成功")
+        self.btn_filter_success.setCheckable(True)
+        self.btn_filter_success.setProperty("class", "PillFilter")
+        
+        self.btn_filter_failed = QPushButton("失败项")
+        self.btn_filter_failed.setCheckable(True)
+        self.btn_filter_failed.setProperty("class", "PillFilter")
+        
+        self.filter_group.addButton(self.btn_filter_all, 0)
+        self.filter_group.addButton(self.btn_filter_pending, 1)
+        self.filter_group.addButton(self.btn_filter_running, 2)
+        self.filter_group.addButton(self.btn_filter_success, 3)
+        self.filter_group.addButton(self.btn_filter_failed, 4)
+        
+        filter_layout.addWidget(self.btn_filter_all)
+        filter_layout.addWidget(self.btn_filter_pending)
+        filter_layout.addWidget(self.btn_filter_running)
+        filter_layout.addWidget(self.btn_filter_success)
+        filter_layout.addWidget(self.btn_filter_failed)
+        
+        center_layout.addWidget(self.filter_widget)
 
         # 任务表格
         self.table = TaskTableWidget(0, 4)
@@ -214,7 +347,6 @@ class MainWindow(QMainWindow):
         btn_control_layout.addLayout(btn_row2_layout)
 
         center_layout.addLayout(btn_control_layout)
-
         main_layout.addWidget(center_panel, stretch=1)
 
         # ================== 右侧：预览卡片 ==================
@@ -231,7 +363,7 @@ class MainWindow(QMainWindow):
         self.lbl_cover.setFixedHeight(340)
         right_layout.addWidget(self.lbl_cover)
 
-        # 引入只读垂直详情滚动区，包裹所有文字、剧照与磁力链接，彻底从物理层解耦空间争抢
+        # 详情滚动区
         from PySide6.QtWidgets import QScrollArea
         self.detail_scroll = QScrollArea()
         self.detail_scroll.setObjectName("DetailScroll")
@@ -304,324 +436,21 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(self.detail_scroll)
         main_layout.addWidget(right_panel)
 
-        # 启用窗口拖入
         self.setAcceptDrops(True)
 
     def apply_stylesheet(self):
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #FFFFFF;
-            }
-            QWidget {
-                color: #1A1C2E;
-                font-family: "Inter", "SF Pro Display", "PingFang SC", "Segoe UI", sans-serif;
-                font-size: 13px;
-            }
-            #LeftPanel, #RightPanel {
-                background-color: #F5F7F9;
-                border-radius: 16px;
-                border: 1px solid #E5EAF2;
-            }
-            QLabel {
-                font-weight: bold;
-                color: #1A1C2E;
-            }
-            QLineEdit, QTextEdit {
-                background-color: #FFFFFF;
-                border: 1px solid #E5EAF2;
-                border-radius: 8px;
-                padding: 6px 10px;
-                color: #1A1C2E;
-            }
-            QLineEdit:focus, QTextEdit:focus {
-                border: 1.5px solid #FF5924;
-            }
-            QPushButton {
-                background-color: #FFFFFF;
-                border: 1.5px solid #E5EAF2;
-                border-radius: 20px;
-                padding: 8px 16px;
-                font-weight: 600;
-                color: #4A5465;
-            }
-            QPushButton:hover {
-                background-color: #F5F7F9;
-                border-color: #FF5924;
-                color: #1A1C2E;
-            }
-            QPushButton:pressed {
-                background-color: #E5EAF2;
-                padding-top: 9px;
-                padding-bottom: 7px;
-            }
-            #StartBtn {
-                background-color: transparent;
-                border: 1.5px solid #FF5924;
-                color: #FF5924;
-            }
-            #StartBtn:hover {
-                background-color: rgba(255, 89, 36, 0.08);
-                color: #FF8550;
-                border-color: #FF8550;
-            }
-            #StartBtn:pressed {
-                background-color: rgba(255, 89, 36, 0.15);
-                padding-top: 9px;
-                padding-bottom: 7px;
-            }
-            #AddCodeBtn {
-                background-color: transparent;
-                border: 1.5px solid #E5EAF2;
-                color: #4A5465;
-            }
-            #AddCodeBtn:hover {
-                background-color: #F5F7F9;
-                border-color: #FF5924;
-                color: #1A1C2E;
-            }
-            #OrganizeBtn {
-                background-color: #FF5924;
-                color: #FFFFFF;
-                border: 1px solid #FF5924;
-                border-radius: 20px;
-            }
-            #OrganizeBtn:hover {
-                background-color: #FF8550;
-                border-color: #FF8550;
-            }
-            #OrganizeBtn:pressed {
-                background-color: #E04414;
-                border-color: #E04414;
-                padding-top: 9px;
-                padding-bottom: 7px;
-            }
-            #SamplesScroll {
-                background-color: #FFFFFF;
-                border: 1px solid #E5EAF2;
-                border-radius: 12px;
-            }
-            #SamplesTitle {
-                color: #FF5924;
-                font-size: 12px;
-                margin-top: 5px;
-            }
-            #CustomProxyCheck {
-                color: #1A1C2E;
-                font-weight: bold;
-            }
-            #MagnetTitle {
-                color: #FF5924;
-                font-size: 12px;
-                margin-top: 5px;
-            }
-            #MagnetTable {
-                background-color: #FFFFFF;
-                border: 1px solid #E5EAF2;
-                border-radius: 12px;
-                gridline-color: #E5EAF2;
-            }
-            #MagnetTable::item {
-                color: #1A1C2E;
-                padding: 4px;
-            }
-            #CopyMagnetBtn {
-                background-color: #FF5924;
-                color: #FFFFFF;
-                border: 1px solid #FF5924;
-                border-radius: 12px;
-                padding: 3px 8px;
-                font-size: 11px;
-                font-weight: bold;
-            }
-            #CopyMagnetBtn:hover {
-                background-color: #FF8550;
-                border-color: #FF8550;
-            }
-            #CopyMagnetBtn:pressed {
-                background-color: #E04414;
-                border-color: #E04414;
-            }
-            #RemoveSelectedBtn {
-                background-color: transparent;
-                border: 1.5px solid #E5EAF2;
-                color: #FF453A;
-            }
-            #RemoveSelectedBtn:hover {
-                background-color: rgba(255, 69, 58, 0.08);
-                border-color: #FF453A;
-            }
-            #RemoveSelectedBtn:pressed {
-                background-color: rgba(255, 69, 58, 0.15);
-                padding-top: 9px;
-                padding-bottom: 7px;
-            }
-            #RetryFailedBtn {
-                background-color: transparent;
-                border: 1.5px solid #E5A73B;
-                color: #E5A73B;
-            }
-            #RetryFailedBtn:hover {
-                background-color: rgba(229, 167, 59, 0.08);
-                color: #F0B849;
-                border-color: #F0B849;
-            }
-            #RetryFailedBtn:pressed {
-                background-color: rgba(229, 167, 59, 0.15);
-                padding-top: 9px;
-                padding-bottom: 7px;
-            }
-            #DropZone {
-                border: 2px dashed #D4DCE5;
-                border-radius: 12px;
-                background-color: #F5F7F9;
-                color: #748297;
-                font-size: 14px;
-            }
-            #DropZone:hover {
-                border-color: #FF5924;
-                background-color: #FFF1F1;
-            }
-            QTableWidget {
-                background-color: #FFFFFF;
-                alternate-background-color: #F5F7F9;
-                gridline-color: #E5EAF2;
-                border: 1px solid #E5EAF2;
-                border-radius: 12px;
-            }
-            QTableWidget::item {
-                color: #1A1C2E;
-                padding: 5px;
-            }
-            QHeaderView::section {
-                background-color: #F0F2F5;
-                color: #4A5465;
-                padding: 6px;
-                border: 1px solid #E5EAF2;
-                font-weight: bold;
-            }
-            #CoverPreview {
-                background-color: #F5F7F9;
-                border: 1px solid #E5EAF2;
-                border-radius: 16px;
-                color: #748297;
-            }
-            #InfoTitle {
-                font-family: "Lora", "Georgia", "Times New Roman", serif;
-                font-size: 13px;
-                color: #FF5924;
-                font-weight: bold;
-            }
-            #InfoDetails {
-                color: #4A5465;
-                line-height: 1.5;
-            }
-            QMessageBox, QDialog, QInputDialog {
-                background-color: #FFFFFF;
-                border: 1px solid #E5EAF2;
-                border-radius: 16px;
-            }
-            QMessageBox QLabel, QInputDialog QLabel {
-                color: #1A1C2E;
-                font-size: 13px;
-            }
-            QMessageBox QPushButton, QInputDialog QPushButton {
-                background-color: #FFFFFF;
-                border: 1.5px solid #E5EAF2;
-                color: #4A5465;
-                padding: 6px 14px;
-                font-weight: bold;
-                border-radius: 15px;
-                min-width: 75px;
-            }
-            QMessageBox QPushButton:hover, QInputDialog QPushButton:hover {
-                background-color: #F5F7F9;
-                border-color: #FF5924;
-                color: #1A1C2E;
-            }
-            QTableWidget QLineEdit {
-                padding: 0px;
-                border: 1px solid #FF5924;
-                border-radius: 0px;
-                background-color: #FFFFFF;
-                color: #1A1C2E;
-            }
-            #EmptyPlaceholder {
-                border: 2px dashed #D4DCE5;
-                border-radius: 12px;
-                background-color: #F5F7F9;
-            }
-            #CopyrightLabel {
-                background-color: transparent;
-            }
-            #CopyrightLabel a {
-                color: #FF5924;
-                font-weight: bold;
-                text-decoration: none;
-            }
-            #CopyrightLabel a:hover {
-                color: #FF8550;
-                text-decoration: underline;
-            }
-            /* 全局垂直滚动条美化 */
-            QScrollBar:vertical {
-                border: none;
-                background-color: #F0F2F5;
-                width: 8px;
-                margin: 0px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #D4DCE5;
-                min-height: 20px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: #FF5924;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                border: none;
-                background: none;
-                height: 0px;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: none;
-            }
-
-            /* 全局水平滚动条美化 */
-            QScrollBar:horizontal {
-                border: none;
-                background-color: #F0F2F5;
-                height: 8px;
-                margin: 0px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:horizontal {
-                background-color: #D4DCE5;
-                min-width: 20px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:horizontal:hover {
-                background-color: #FF5924;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                border: none;
-                background: none;
-                width: 0px;
-            }
-            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-                background: none;
-            }
-        """)
+        self.setStyleSheet(STYLE_SHEET)
 
     def update_empty_placeholder_visibility(self, is_empty: bool):
         if is_empty:
             self.table.hide()
+            self.filter_widget.hide()
             self.empty_placeholder.show()
         else:
             self.table.show()
+            self.filter_widget.show()
             self.empty_placeholder.hide()
 
-    # 拖拽事件捕获
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
@@ -639,3 +468,12 @@ class MainWindow(QMainWindow):
         if paths:
             self.files_dropped.emit(paths)
         self.drop_label.setStyleSheet("")
+
+    def _insert_template_var(self, var: str):
+        """将变量芯片插入模板输入框的当前光标位置"""
+        cur_text = self.tmpl_input.text()
+        pos = self.tmpl_input.cursorPosition()
+        new_text = cur_text[:pos] + var + cur_text[pos:]
+        self.tmpl_input.setText(new_text)
+        self.tmpl_input.setCursorPosition(pos + len(var))
+        self.tmpl_input.setFocus()

@@ -37,14 +37,13 @@ JAVDB = {
     'domains': [
         'javdb.com',
         'javdb570.com',
-        'javdb372.com',
     ],
     # 默认域名索引
     'default_domain_index': 0,
     # 请求超时（秒）
-    'timeout': 30,
+    'timeout': 8,
     # 重试次数
-    'retry_times': 3,
+    'retry_times': 1,
     # 请求间隔（秒）
     'sleep_time': 2,
     # 每页作品数

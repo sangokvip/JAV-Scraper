@@ -11,6 +11,7 @@ from pathlib import Path
 from .platform import Platform
 from .base_adapter import BaseAdapter
 from .javdb_adapter import JavdbAdapter
+from .jav321_adapter import Jav321Adapter
 
 
 class AdapterFactory:
@@ -18,6 +19,7 @@ class AdapterFactory:
     
     _adapters = {
         Platform.JAVDB: JavdbAdapter,
+        Platform.JAV321: Jav321Adapter,
     }
     
     _instances: Dict[Platform, BaseAdapter] = {}

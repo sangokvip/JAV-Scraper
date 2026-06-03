@@ -23,7 +23,8 @@ def save_tasks_backup(task_files: dict, filepath: str = DEFAULT_BACKUP_PATH):
                 "code": info.get("code", ""),
                 "row": info.get("row", 0),
                 "status": info.get("status", "等待中"),
-                "detail": info.get("detail")
+                "detail": info.get("detail"),
+                "extra_files": info.get("extra_files", [])
             }
             
         with open(filepath, "w", encoding="utf-8") as f:
@@ -57,7 +58,8 @@ def load_tasks_backup(filepath: str = DEFAULT_BACKUP_PATH) -> dict:
                     "code": info.get("code", ""),
                     "row": info.get("row", 0),
                     "status": info.get("status", "等待中"),
-                    "detail": info.get("detail")
+                    "detail": info.get("detail"),
+                    "extra_files": info.get("extra_files", [])
                 }
         return restored_tasks
     except Exception as e:

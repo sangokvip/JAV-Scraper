@@ -57,3 +57,4 @@ settings_backup.json
 tasks_backup.json
 malicious_code.nfo
 .DS_Store
+/docs

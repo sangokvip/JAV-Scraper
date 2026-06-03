@@ -19,6 +19,6 @@ fi
 export PATH="/Users/mac/Library/Python/3.9/bin:$PATH"
 
 # 调用 pyinstaller 进行打包 (使用已定制 Info.plist 的 spec 配置文件以注入 macOS 隐私权限描述)
-pyinstaller --noconfirm "JAV SCRAPER.spec"
+pyinstaller --noconfirm "JAV_SCRAPER_mac.spec"
 
 echo "macOS 打包成功，打包文件生成于 dist/ 目录。"

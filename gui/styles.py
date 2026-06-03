@@ -101,6 +101,8 @@ STYLE_SHEET = """
         color: #1A1C2E;
         font-weight: 600;
         spacing: 8px;
+        padding-top: 3px;
+        padding-bottom: 3px;
     }
     QCheckBox::indicator {
         width: 16px;

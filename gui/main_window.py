@@ -38,8 +38,9 @@ class MainWindow(QMainWindow):
         left_panel.setObjectName("LeftPanel")
         left_panel.setFixedWidth(270)
         left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(12, 12, 12, 12)
-        left_layout.setSpacing(10)
+        left_layout.setContentsMargins(12, 8, 12, 8)
+        left_layout.setSpacing(7)
+
 
         # ⚠️ VPN 必要性提示
         vpn_notice = QLabel("⚠️  刮削需要 VPN 代理\n请确保已开启 VPN，否则无法连接至 JAVDB。")
@@ -145,18 +146,15 @@ class MainWindow(QMainWindow):
             ("{year}", "年份"),
             ("{date}", "日期"),
         ]
-        chip_row1 = QHBoxLayout()
-        chip_row1.setSpacing(4)
-        chip_row1.setContentsMargins(0, 0, 0, 0)
-        chip_row2 = QHBoxLayout()
-        chip_row2.setSpacing(4)
-        chip_row2.setContentsMargins(0, 0, 0, 0)
+        chip_row = QHBoxLayout()
+        chip_row.setSpacing(3)
+        chip_row.setContentsMargins(0, 0, 0, 0)
         chip_style = (
             "QPushButton {"
             "  background-color: rgba(255,89,36,0.08);"
             "  border: 1px solid rgba(255,89,36,0.35);"
             "  border-radius: 10px;"
-            "  padding: 2px 8px;"
+            "  padding: 2px 5px;"
             "  font-size: 11px;"
             "  color: #FF5924;"
             "  font-weight: 600;"
@@ -166,21 +164,16 @@ class MainWindow(QMainWindow):
             "  border-color: #FF5924;"
             "}"
         )
-        for i, (var, label) in enumerate(chip_vars):
+        for var, label in chip_vars:
             chip_btn = QPushButton(f"{label}")
             chip_btn.setToolTip(f"点击插入 {var}")
             chip_btn.setStyleSheet(chip_style)
             chip_btn.setFixedHeight(22)
             chip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             chip_btn.clicked.connect(lambda _, v=var: self._insert_template_var(v))
-            if i < 3:
-                chip_row1.addWidget(chip_btn)
-            else:
-                chip_row2.addWidget(chip_btn)
-        chip_row1.addStretch()
-        chip_row2.addStretch()
-        left_layout.addLayout(chip_row1)
-        left_layout.addLayout(chip_row2)
+            chip_row.addWidget(chip_btn)
+        chip_row.addStretch()
+        left_layout.addLayout(chip_row)
 
         # 整理首选项
         left_layout.addWidget(QLabel("整理首选项:"))
@@ -194,12 +187,12 @@ class MainWindow(QMainWindow):
 
         # 所有权展示与免责声明
         self.lbl_copyright = QLabel(
-            "<div style='text-align: center; margin-top: 10px; border-top: 1px solid #E5EAF2; padding-top: 8px;'>"
+            "<div style='text-align: center; margin-top: 4px; border-top: 1px solid #E5EAF2; padding-top: 4px;'>"
             "  <div style='color: #748297; font-size: 11px; margin-bottom: 2px;'><b>所有权归属</b></div>"
-            "  <div style='color: #FF5924; font-size: 11px; font-weight: bold; margin-bottom: 4px;'>"
+            "  <div style='color: #FF5924; font-size: 11px; font-weight: bold; margin-bottom: 2px;'>"
             "    <a href='https://github.com/sangokvip/JAV-Scraper' style='color: #FF5924; text-decoration: none;'>GitHub: JAV-Scraper</a>"
             "  </div>"
-            "  <div style='color: #748297; font-size: 10px; line-height: 1.4;'>"
+            "  <div style='color: #748297; font-size: 10px; line-height: 1.3;'>"
             "    仅供学习交流使用<br><b>严禁用于任何商业用途</b>"
             "  </div>"
             "</div>"

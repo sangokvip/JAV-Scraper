@@ -28,6 +28,38 @@ from helpers.subtitle_helper import find_matching_subtitles
 from helpers.duplicate_detector import find_existing_organized_folder
 from helpers.player_helper import play_video, open_local_folder
 from helpers.template_helper import format_target_path
+class ProxyTestWorkerSignals(QObject):
+    finished = Signal(bool, str)
+
+class ProxyTestWorker(QRunnable):
+    def __init__(self, proxy, timeout=8):
+        super().__init__()
+        self.proxy = proxy
+        self.timeout = timeout
+        self.signals = ProxyTestWorkerSignals()
+
+    def run(self):
+        proxies = {"http": self.proxy, "https": self.proxy} if self.proxy else None
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        try:
+            r = requests.get("https://www.google.com", timeout=self.timeout, proxies=proxies, headers=headers)
+            if r.status_code == 200:
+                self.signals.finished.emit(True, "连接正常 (OK)")
+                return
+        except Exception:
+            pass
+
+        target_url = "https://javdb.com"
+        try:
+            r = requests.get(target_url, timeout=self.timeout, proxies=proxies, headers=headers)
+            if r.status_code in [200, 301, 302, 403]:
+                self.signals.finished.emit(True, "连接正常 (OK)")
+            else:
+                self.signals.finished.emit(False, f"连接失败: 状态码 {r.status_code}")
+        except Exception as e:
+            self.signals.finished.emit(False, "连接超时/不可用")
 
 class Controller:
     def __init__(self, view: MainWindow):
@@ -44,6 +76,7 @@ class Controller:
         self.current_preview_filepath = None
         self.processed_parent_dirs = set()
         self.active_workers = set()
+        self.running_scrape_workers = {}
         self.image_session = requests.Session()
         self.pixmap_cache = {}  # 强引用缩放图片缓存：(path_or_url, w, h) -> QPixmap
 
@@ -484,6 +517,20 @@ class Controller:
         return None
 
     def start_worker(self, worker):
+        fp = worker.file_path
+        if fp in self.running_scrape_workers:
+            old_worker = self.running_scrape_workers[fp]
+            old_worker.is_cancelled = True
+            try:
+                old_worker.signals.started.disconnect()
+                old_worker.signals.progress.disconnect()
+                old_worker.signals.preview_loaded.disconnect()
+                old_worker.signals.finished.disconnect()
+                old_worker.signals.finished_worker.disconnect()
+            except Exception:
+                pass
+            self.running_scrape_workers.pop(fp, None)
+
         worker.setAutoDelete(False)
         worker.signals.started.connect(self.on_worker_started)
         worker.signals.progress.connect(self.on_worker_progress)
@@ -491,9 +538,23 @@ class Controller:
         worker.signals.finished.connect(self.on_worker_finished)
         worker.signals.finished_worker.connect(self.on_worker_destroyed)
         self.active_workers.add(worker)
+        self.running_scrape_workers[fp] = worker
         self.scrape_pool.start(worker)
 
     def clear_all_tasks(self):
+        # 立即取消所有运行中的 worker 并断开信号连接
+        for fp, worker in list(self.running_scrape_workers.items()):
+            worker.is_cancelled = True
+            try:
+                worker.signals.started.disconnect()
+                worker.signals.progress.disconnect()
+                worker.signals.preview_loaded.disconnect()
+                worker.signals.finished.disconnect()
+                worker.signals.finished_worker.disconnect()
+            except Exception:
+                pass
+        self.running_scrape_workers.clear()
+
         self.view.table.setRowCount(0)
         self.task_files.clear()
         self.pixmap_cache.clear()
@@ -521,6 +582,19 @@ class Controller:
                     break
             
             if target_fp:
+                if target_fp in self.running_scrape_workers:
+                    worker = self.running_scrape_workers[target_fp]
+                    worker.is_cancelled = True
+                    try:
+                        worker.signals.started.disconnect()
+                        worker.signals.progress.disconnect()
+                        worker.signals.preview_loaded.disconnect()
+                        worker.signals.finished.disconnect()
+                        worker.signals.finished_worker.disconnect()
+                    except Exception:
+                        pass
+                    self.running_scrape_workers.pop(target_fp, None)
+
                 if target_fp in self.task_files:
                     del self.task_files[target_fp]
                 self.view.table.removeRow(row)
@@ -878,24 +952,38 @@ class Controller:
     # ================== 后台线程信号槽 ==================
     def on_worker_destroyed(self, worker):
         self.active_workers.discard(worker)
+        fp = getattr(worker, 'file_path', None)
+        if fp and self.running_scrape_workers.get(fp) == worker:
+            self.running_scrape_workers.pop(fp, None)
 
     def on_worker_started(self, filepath):
-        if filepath in self.task_files:
-            info = self.task_files[filepath]
-            info["status"] = "开始执行"
-            self.view.table.removeCellWidget(info["row"], 3)
-            self.view.table.setItem(info["row"], 3, QTableWidgetItem("开始执行"))
+        if filepath not in self.task_files:
+            return
+        info = self.task_files[filepath]
+        row = info.get("row", -1)
+        if row < 0 or row >= self.view.table.rowCount():
+            return
+        info["status"] = "开始执行"
+        try:
+            self.view.table.removeCellWidget(row, 3)
+            self.view.table.setItem(row, 3, QTableWidgetItem("开始执行"))
             self.save_backup()
             self.apply_task_filter()
+        except Exception as e:
+            print(f"Error on_worker_started: {e}")
 
     def on_worker_progress(self, filepath, message):
-        if filepath in self.task_files:
-            info = self.task_files[filepath]
-            info["status"] = message
-            row = info["row"]
+        if filepath not in self.task_files:
+            return
+        info = self.task_files[filepath]
+        info["status"] = message
+        row = info.get("row", -1)
+        if row < 0 or row >= self.view.table.rowCount():
+            return
             
-            import re
-            match = re.search(r"\((\d+)/(\d+)\)", message)
+        import re
+        match = re.search(r"\((\d+)/(\d+)\)", message)
+        try:
             if match:
                 current = int(match.group(1))
                 total = int(match.group(2))
@@ -945,52 +1033,68 @@ class Controller:
             else:
                 self.view.table.removeCellWidget(row, 3)
                 self.view.table.setItem(row, 3, QTableWidgetItem(message))
+        except Exception as e:
+            print(f"Error on_worker_progress: {e}")
 
     def on_worker_preview_loaded(self, filepath, detail):
-        if filepath in self.task_files:
-            self.task_files[filepath]["detail"] = detail
-            
+        if filepath not in self.task_files:
+            return
+        self.task_files[filepath]["detail"] = detail
+        
         self.save_backup()
 
         selected_ranges = self.view.table.selectedRanges()
         if selected_ranges:
             current_row = selected_ranges[0].topRow()
-            if filepath in self.task_files and self.task_files[filepath]["row"] == current_row:
-                self.show_preview_details(detail, filepath)
+            row = self.task_files[filepath].get("row", -1)
+            if row == current_row and 0 <= row < self.view.table.rowCount():
+                try:
+                    self.show_preview_details(detail, filepath)
+                except Exception as e:
+                    print(f"Error show_preview_details in preview_loaded: {e}")
 
     def on_worker_finished(self, filepath, status):
-        if filepath in self.task_files:
-            info = self.task_files[filepath]
-            self.view.table.removeCellWidget(info["row"], 3)
-            if status == "success":
-                info["status"] = "已整理成功"
-                self.view.table.setItem(info["row"], 3, QTableWidgetItem("✅ 已整理成功"))
+        if filepath not in self.task_files:
+            return
+        info = self.task_files[filepath]
+        row = info.get("row", -1)
+        if 0 <= row < self.view.table.rowCount():
+            try:
+                self.view.table.removeCellWidget(row, 3)
+                if status == "success":
+                    info["status"] = "已整理成功"
+                    self.view.table.setItem(row, 3, QTableWidgetItem("✅ 已整理成功"))
+                    
+                    selected_ranges = self.view.table.selectedRanges()
+                    if selected_ranges and selected_ranges[0].topRow() == row:
+                        detail = info["detail"]
+                        self.show_preview_details(detail, filepath, loaded_local=True)
+                    
+                    if not filepath.startswith("__virtual__:"):
+                        parent_dir = os.path.dirname(filepath)
+                        self.processed_parent_dirs.add(parent_dir)
+                        # 联动分段文件目录
+                        for extra_f in info.get("extra_files", []):
+                            self.processed_parent_dirs.add(os.path.dirname(extra_f))
+                elif status == "scrape_success":
+                    info["status"] = "已刮削(未整理)"
+                    self.view.table.setItem(row, 3, QTableWidgetItem("已刮削(未整理)"))
+                    
+                    selected_ranges = self.view.table.selectedRanges()
+                    if selected_ranges and selected_ranges[0].topRow() == row:
+                        detail = info["detail"]
+                        self.show_preview_details(detail, filepath, loaded_local=False)
+                elif status == "cancelled":
+                    info["status"] = "已取消"
+                    self.view.table.setItem(row, 3, QTableWidgetItem("已取消"))
+                else:
+                    info["status"] = f"失败: {status}"
+                    self.view.table.setItem(row, 3, QTableWidgetItem(f"❌ 失败: {status}"))
                 
-                selected_ranges = self.view.table.selectedRanges()
-                if selected_ranges and selected_ranges[0].topRow() == info["row"]:
-                    detail = info["detail"]
-                    self.show_preview_details(detail, filepath, loaded_local=True)
-                
-                if not filepath.startswith("__virtual__:"):
-                    parent_dir = os.path.dirname(filepath)
-                    self.processed_parent_dirs.add(parent_dir)
-                    # 联动分段文件目录
-                    for extra_f in info.get("extra_files", []):
-                        self.processed_parent_dirs.add(os.path.dirname(extra_f))
-            elif status == "scrape_success":
-                info["status"] = "已刮削(未整理)"
-                self.view.table.setItem(info["row"], 3, QTableWidgetItem("已刮削(未整理)"))
-                
-                selected_ranges = self.view.table.selectedRanges()
-                if selected_ranges and selected_ranges[0].topRow() == info["row"]:
-                    detail = info["detail"]
-                    self.show_preview_details(detail, filepath, loaded_local=False)
-            else:
-                info["status"] = f"失败: {status}"
-                self.view.table.setItem(info["row"], 3, QTableWidgetItem(f"❌ 失败: {status}"))
-            
-            self.save_backup()
-            self.apply_task_filter()
+                self.save_backup()
+                self.apply_task_filter()
+            except Exception as e:
+                print(f"Error updating UI in on_worker_finished: {e}")
 
         # 检查是否所有正在执行的任务都已执行完毕
         all_done = True
@@ -1329,33 +1433,20 @@ class Controller:
         proxy = self.view.proxy_input.text().strip()
         self.view.lbl_proxy_status.setText("正在测试连接...")
         self.view.lbl_proxy_status.setStyleSheet("color: #E5C158;")
-        
-        proxies = {"http": proxy, "https": proxy} if proxy else None
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
+        self.view.btn_test_proxy.setEnabled(False)
 
-        try:
-            r = requests.get("https://www.google.com", timeout=8, proxies=proxies, headers=headers)
-            if r.status_code == 200:
-                self.view.lbl_proxy_status.setText("连接正常 (OK)")
-                self.view.lbl_proxy_status.setStyleSheet("color: #34C759;")
-                return
-        except:
-            pass
+        worker = ProxyTestWorker(proxy)
 
-        target_url = "https://javdb.com"
-        try:
-            r = requests.get(target_url, timeout=8, proxies=proxies, headers=headers)
-            if r.status_code in [200, 301, 302, 403]:
-                self.view.lbl_proxy_status.setText("连接正常 (OK)")
+        def on_test_finished(success, msg):
+            self.view.lbl_proxy_status.setText(msg)
+            if success:
                 self.view.lbl_proxy_status.setStyleSheet("color: #34C759;")
             else:
-                self.view.lbl_proxy_status.setText(f"连接失败: 状态码 {r.status_code}")
                 self.view.lbl_proxy_status.setStyleSheet("color: #FF453A;")
-        except Exception as e:
-            self.view.lbl_proxy_status.setText("连接超时/不可用")
-            self.view.lbl_proxy_status.setStyleSheet("color: #FF453A;")
+            self.view.btn_test_proxy.setEnabled(True)
+
+        worker.signals.finished.connect(on_test_finished)
+        self.thread_pool.start(worker)
 
     def load_cookie_config(self):
         cookie_path = config.COOKIE_FILE

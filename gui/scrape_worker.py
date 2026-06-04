@@ -33,11 +33,16 @@ class ScrapeWorker(QRunnable):
         self.write_subtitle_tag = write_subtitle_tag
         self.conflict_resolution = conflict_resolution
         self.signals = WorkerSignals()
+        self.is_cancelled = False
 
     def run(self):
         self.signals.started.emit(self.file_path)
         try:
             try:
+                if self.is_cancelled:
+                    self.signals.finished.emit(self.file_path, "cancelled")
+                    return
+
                 if not self.code:
                     self.signals.finished.emit(self.file_path, "未识别出番号，请双击补充。")
                     return
@@ -51,6 +56,9 @@ class ScrapeWorker(QRunnable):
                 else:
                     detail = None
                     try:
+                        if self.is_cancelled:
+                            self.signals.finished.emit(self.file_path, "cancelled")
+                            return
                         self.signals.progress.emit(self.file_path, "正在从 JAVDB 平台刮削数据...")
                         AdapterFactory.clear_instance()
                         adapter = AdapterFactory.get_adapter_by_name(
@@ -64,6 +72,9 @@ class ScrapeWorker(QRunnable):
                     # 若 JAVDB 刮削失败或返回空，降级回退至 JAV321 直连
                     if not detail:
                         try:
+                            if self.is_cancelled:
+                                self.signals.finished.emit(self.file_path, "cancelled")
+                                return
                             self.signals.progress.emit(self.file_path, "JAVDB 刮削失败，正在降级回退至 JAV321 (直连)...")
                             AdapterFactory.clear_instance()
                             adapter_fallback = AdapterFactory.get_adapter_by_name("jav321", proxies=self.proxies)
@@ -77,6 +88,10 @@ class ScrapeWorker(QRunnable):
                     self.signals.finished.emit(self.file_path, f"在平台中找不到番号: {self.code}")
                     return
 
+                if self.is_cancelled:
+                    self.signals.finished.emit(self.file_path, "cancelled")
+                    return
+
                 if not self.file_path.startswith("__virtual__:"):
                     detail["magnets"] = []
 
@@ -87,6 +102,9 @@ class ScrapeWorker(QRunnable):
                     return
 
                 # 2. 根据模板计算目标文件夹绝对路径
+                if self.is_cancelled:
+                    self.signals.finished.emit(self.file_path, "cancelled")
+                    return
                 self.signals.progress.emit(self.file_path, "正在生成归档路径...")
                 target_folder = format_target_path(self.rename_template, self.output_dir, self.code, detail)
                 
@@ -108,9 +126,15 @@ class ScrapeWorker(QRunnable):
                     video_files.sort() # 保证 -cd1, -cd2 顺序稳定
 
                 if video_files:
+                    if self.is_cancelled:
+                        self.signals.finished.emit(self.file_path, "cancelled")
+                        return
                     self.signals.progress.emit(self.file_path, "正在移动与重命名影片及外挂字幕...")
                     
                     for idx, v_path in enumerate(video_files):
+                        if self.is_cancelled:
+                            self.signals.finished.emit(self.file_path, "cancelled")
+                            return
                         ext = os.path.splitext(v_path)[1]
                         
                         # 查找外挂字幕
@@ -164,6 +188,9 @@ class ScrapeWorker(QRunnable):
                             move_and_rename_subtitles(v_path, target_video_path, subs)
 
                 # 4. 写入元数据 NFO
+                if self.is_cancelled:
+                    self.signals.finished.emit(self.file_path, "cancelled")
+                    return
                 self.signals.progress.emit(self.file_path, "正在生成元数据 NFO...")
                 nfo_path = os.path.join(target_folder, f"{self.code}.nfo")
                 
@@ -193,17 +220,26 @@ class ScrapeWorker(QRunnable):
                 generate_nfo(nfo_data, nfo_path)
 
                 # 5. 下载海报大图 poster.jpg
+                if self.is_cancelled:
+                    self.signals.finished.emit(self.file_path, "cancelled")
+                    return
                 self.signals.progress.emit(self.file_path, "正在下载封面大图...")
                 cover_url = detail.get("cover_url")
                 if cover_url:
                     r = requests.get(cover_url, timeout=10, proxies=self.proxies)
                     if r.status_code == 200:
+                        if self.is_cancelled:
+                            self.signals.finished.emit(self.file_path, "cancelled")
+                            return
                         with open(os.path.join(target_folder, "poster.jpg"), "wb") as f:
                             f.write(r.content)
 
                 # 6. 下载样品预览图 (根据偏好设置控制)
                 thumbnails = detail.get("thumbnail_images", [])
                 if thumbnails and self.download_samples:
+                    if self.is_cancelled:
+                        self.signals.finished.emit(self.file_path, "cancelled")
+                        return
                     self.signals.progress.emit(self.file_path, f"正在下载预览图 (0/{len(thumbnails)})...")
                     extrafanart_dir = os.path.join(target_folder, "extrafanart")
                     os.makedirs(extrafanart_dir, exist_ok=True)
@@ -212,9 +248,13 @@ class ScrapeWorker(QRunnable):
 
                     def download_image(args):
                         idx, img_url = args
+                        if self.is_cancelled:
+                            return False
                         try:
                             r = requests.get(img_url, timeout=8, proxies=self.proxies)
                             if r.status_code == 200:
+                                if self.is_cancelled:
+                                    return False
                                 img_path = os.path.join(extrafanart_dir, f"fanart{idx+1}.jpg")
                                 with open(img_path, "wb") as f:
                                     f.write(r.content)
@@ -227,12 +267,21 @@ class ScrapeWorker(QRunnable):
                     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
                         tasks = {executor.submit(download_image, (idx, img_url)): idx for idx, img_url in enumerate(thumbnails)}
                         for future in concurrent.futures.as_completed(tasks):
+                            if self.is_cancelled:
+                                break
                             completed += 1
                             self.signals.progress.emit(self.file_path, f"正在下载预览图 ({completed}/{len(thumbnails)})...")
+
+                if self.is_cancelled:
+                    self.signals.finished.emit(self.file_path, "cancelled")
+                    return
 
                 self.signals.finished.emit(self.file_path, "success")
 
             except Exception as e:
+                if self.is_cancelled:
+                    self.signals.finished.emit(self.file_path, "cancelled")
+                    return
                 tb_str = traceback.format_exc()
                 try:
                     log_path = os.path.expanduser("~/Desktop/jav_scraper_error.log")

@@ -23,7 +23,7 @@ class TagManager:
             key: 解密密钥，默认使用 DEFAULT_KEY
         """
         if database_path is None:
-            database_path = Path(__file__).parent.parent / "output" / "tags_database.enc"
+            database_path = Path(__file__).parent / "tags_database.enc"
         else:
             database_path = Path(database_path)
         

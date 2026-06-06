@@ -853,6 +853,10 @@ class Controller:
             QMessageBox.warning(self.view, "警告", "请先选择目标保存路径！")
             return
 
+        # 确保默认输出目录按需创建
+        if output_dir == str(config.OUTPUT_DIR['root']):
+            config.ensure_output_dirs()
+
         todo_files = []
         done_files = []
         for fp, info in self.task_files.items():
@@ -897,6 +901,10 @@ class Controller:
         if not output_dir:
             QMessageBox.warning(self.view, "警告", "请先选择目标保存路径！")
             return
+
+        # 确保默认输出目录按需创建
+        if output_dir == str(config.OUTPUT_DIR['root']):
+            config.ensure_output_dirs()
 
         todo_files = []
         done_files = []

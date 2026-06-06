@@ -47,21 +47,25 @@ def format_target_path(template: str, output_dir: str, code: str, detail: dict) 
     year_clean = clean_path_component(year) or "未知年份"
     date_clean = clean_path_component(date) or "未知日期"
     
-    # 执行模板变量替换 (忽略大小写)
-    path_rel = template
+    # 执行模板变量替换 (忽略大小写，且支持花括号内的修饰符如 {[code]})
     replacements = {
-        "{actor}": actor_clean,
-        "{studio}": studio_clean,
-        "{code}": code_clean,
-        "{title}": title_clean,
-        "{year}": year_clean,
-        "{date}": date_clean
+        "actor": actor_clean,
+        "studio": studio_clean,
+        "code": code_clean,
+        "title": title_clean,
+        "year": year_clean,
+        "date": date_clean
     }
     
-    for key, val in replacements.items():
-        # 用正则实现不区分大小写的替换
-        pattern = re.compile(re.escape(key), re.IGNORECASE)
-        path_rel = pattern.sub(val, path_rel)
+    def replace_placeholder(match):
+        inner = match.group(1)
+        for key, val in replacements.items():
+            pattern = re.compile(re.escape(key), re.IGNORECASE)
+            if pattern.search(inner):
+                return pattern.sub(val, inner)
+        return match.group(0)
+        
+    path_rel = re.sub(r'\{([^{}]+)\}', replace_placeholder, template)
         
     # 分割相对路径，规范化并防范路径穿越 (..)
     parts = []

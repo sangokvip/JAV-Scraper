@@ -894,7 +894,14 @@
 - **回滚点**:
   - `git checkout HEAD -- gui/main_window.py gui/controller.py gui/styles.py`
 
-
-
-
-
+### 34) Fix: 升级命名模板解析正则支持 {[code]} 并修复 macOS 磁力复制按钮白色 bug
+- **变更文件**: `helpers/template_helper.py`、`gui/main_window.py`、`gui/controller.py`
+- **背景与目标**: 修复用户反馈的两个 UI 遗留问题：一是命名模板中类似 `{[code]}` 带中括号的变量在预览和整理时未能被替换成真实番号；二是 macOS 下磁力链接“复制”按钮在单元格中依然呈现低对比度的纯白色样式。
+- **技术实施**:
+  - **命名模板正则匹配重构**: 在 `helpers/template_helper.py` 和 `gui/main_window.py` 中，将原有的硬编码 Key 替换逻辑升级为统一的正则解析提取算法 `re.sub(r'\{([^{}]+)\}', replace_placeholder, template)`。该正则提取花括号中的内部变量名并在其包含关键字时执行内部替换，不仅完美替换原有的 `{code}`，还能智能应对 `{[code]}` 等各种外置或内置修饰括号语法，且保持大小写不敏感。
+  - **磁力“复制”按钮 macOS 样式修复**: 在 `gui/controller.py` 中，重构磁力链接表格中“复制”按钮的单元格嵌入结构。在 QPushButton 外层包裹了一个 `QWidget` 作为容器，并通过 `QHBoxLayout` 设置居中与内联的 CSS 样式表，使其完全脱离 macOS Native Table Cell 渲染器的原生按钮控制，保证在 macOS 平台上 100% 渲染出高对比度的橙色高亮品牌风格。
+- **风险自查**:
+  - 经 Python 脚本和本地运行验证，两处 Bug 均得到完美解决，不涉及任何底层爬虫数据与 I/O 更改，安全无风险。
+  - 11 个单元测试 100% 重新通过。
+- **回滚点**:
+  - `git checkout HEAD -- helpers/template_helper.py gui/main_window.py gui/controller.py`

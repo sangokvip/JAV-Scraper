@@ -482,6 +482,7 @@ class MainWindow(QMainWindow):
 
     def update_template_preview(self):
         """更新并渲染命名模板的中文示例效果"""
+        import re
         tmpl = self.tmpl_input.text()
         sample_data = {
             "actor": "三上悠亚",
@@ -491,7 +492,14 @@ class MainWindow(QMainWindow):
             "year": "2023",
             "date": "2023-01-01"
         }
-        preview = tmpl
-        for k, v in sample_data.items():
-            preview = preview.replace(f"{{{k}}}", v)
+        
+        def replace_placeholder(match):
+            inner = match.group(1)
+            for k, v in sample_data.items():
+                pattern = re.compile(re.escape(k), re.IGNORECASE)
+                if pattern.search(inner):
+                    return pattern.sub(v, inner)
+            return match.group(0)
+            
+        preview = re.sub(r'\{([^{}]+)\}', replace_placeholder, tmpl)
         self.lbl_tmpl_example.setText(f"预览: {preview}")

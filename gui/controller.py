@@ -1251,10 +1251,38 @@ class Controller:
             date_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.view.table_magnet.setItem(row, 1, date_item)
 
+            # 用 QWidget 容器包裹按钮，在 macOS 下避免原生按钮强制白化遮罩并行内限制大小
+            container = QWidget()
+            layout = QHBoxLayout(container)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
             btn_copy = QPushButton("复制")
             btn_copy.setObjectName("CopyMagnetBtn")
+            btn_copy.setStyleSheet("""
+                QPushButton {
+                    background-color: #FF5924;
+                    color: #FFFFFF;
+                    border: 1px solid #FF5924;
+                    border-radius: 6px;
+                    padding: 3px 8px;
+                    font-size: 11px;
+                    font-weight: bold;
+                    min-width: 44px;
+                }
+                QPushButton:hover {
+                    background-color: #FF8550;
+                    border-color: #FF8550;
+                }
+                QPushButton:pressed {
+                    background-color: #E04414;
+                    border-color: #E04414;
+                }
+            """)
             btn_copy.clicked.connect(lambda checked=False, link=magnet_link: self.copy_to_clipboard(link))
-            self.view.table_magnet.setCellWidget(row, 2, btn_copy)
+            layout.addWidget(btn_copy)
+            self.view.table_magnet.setCellWidget(row, 2, container)
 
         self.view.table_magnet.sortByColumn(0, Qt.SortOrder.DescendingOrder)
         self.view.table_magnet.setSortingEnabled(True)

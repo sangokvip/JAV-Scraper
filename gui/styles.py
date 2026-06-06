@@ -28,6 +28,14 @@ STYLE_SHEET = """
     QLineEdit:focus, QTextEdit:focus {
         border: 1.5px solid #FF5924;
     }
+    #TemplateExampleLabel {
+        color: #748297;
+        font-size: 11px;
+        font-weight: normal;
+        margin-top: 1px;
+        margin-bottom: 3px;
+        background-color: transparent;
+    }
     QPushButton {
         background-color: #FFFFFF;
         border: 1.5px solid #E5EAF2;
@@ -136,18 +144,20 @@ STYLE_SHEET = """
     #CopyMagnetBtn {
         background-color: #FF5924;
         color: #FFFFFF;
-        border: none;
+        border: 1px solid #FF5924;
         border-radius: 10px;
-        padding: 5px 10px;
-        font-size: 12px;
+        padding: 3px 8px;
+        font-size: 11px;
         font-weight: bold;
-        min-width: 48px;
+        min-width: 44px;
     }
     #CopyMagnetBtn:hover {
         background-color: #FF8550;
+        border-color: #FF8550;
     }
     #CopyMagnetBtn:pressed {
         background-color: #E04414;
+        border-color: #E04414;
     }
     #RemoveSelectedBtn {
         background-color: transparent;
@@ -165,16 +175,16 @@ STYLE_SHEET = """
     }
     #RetryFailedBtn {
         background-color: transparent;
-        border: 1.5px solid #E5A73B;
-        color: #E5A73B;
+        border: 1.5px solid #E5EAF2;
+        color: #FF5924;
     }
     #RetryFailedBtn:hover {
-        background-color: rgba(229, 167, 59, 0.08);
-        color: #F0B849;
-        border-color: #F0B849;
+        background-color: rgba(255, 89, 36, 0.08);
+        border-color: #FF5924;
+        color: #FF5924;
     }
     #RetryFailedBtn:pressed {
-        background-color: rgba(229, 167, 59, 0.15);
+        background-color: rgba(255, 89, 36, 0.15);
         padding-top: 9px;
         padding-bottom: 7px;
     }

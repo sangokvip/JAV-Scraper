@@ -126,7 +126,6 @@ class MainWindow(QMainWindow):
         # 保存路径
         left_layout.addWidget(QLabel("保存目标路径:"))
         self.path_input = QLineEdit()
-        self.path_input.setReadOnly(True)
         left_layout.addWidget(self.path_input)
         self.btn_browse = QPushButton("浏览并选择路径...")
         left_layout.addWidget(self.btn_browse)
@@ -136,6 +135,12 @@ class MainWindow(QMainWindow):
         self.tmpl_input = QLineEdit("{actor}/{[code]} {title}")
         self.tmpl_input.setObjectName("TemplateInput")
         left_layout.addWidget(self.tmpl_input)
+
+        # 动态效果预览标签
+        self.lbl_tmpl_example = QLabel()
+        self.lbl_tmpl_example.setObjectName("TemplateExampleLabel")
+        self.lbl_tmpl_example.setWordWrap(True)
+        left_layout.addWidget(self.lbl_tmpl_example)
 
         # 变量芯片（点击自动插入光标处）
         chip_vars = [
@@ -430,6 +435,10 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(right_panel)
 
         self.setAcceptDrops(True)
+        
+        # 绑定模板实时中文效果预览
+        self.tmpl_input.textChanged.connect(self.update_template_preview)
+        self.update_template_preview()
 
     def apply_stylesheet(self):
         self.setStyleSheet(STYLE_SHEET)
@@ -470,3 +479,19 @@ class MainWindow(QMainWindow):
         self.tmpl_input.setText(new_text)
         self.tmpl_input.setCursorPosition(pos + len(var))
         self.tmpl_input.setFocus()
+
+    def update_template_preview(self):
+        """更新并渲染命名模板的中文示例效果"""
+        tmpl = self.tmpl_input.text()
+        sample_data = {
+            "actor": "三上悠亚",
+            "studio": "S1",
+            "code": "SSNI-001",
+            "title": "经典作品",
+            "year": "2023",
+            "date": "2023-01-01"
+        }
+        preview = tmpl
+        for k, v in sample_data.items():
+            preview = preview.replace(f"{{{k}}}", v)
+        self.lbl_tmpl_example.setText(f"预览: {preview}")

@@ -882,6 +882,18 @@
 - **回滚点**:
   - `git checkout HEAD -- config.py lib/tag_manager.py gui/controller.py && mv lib/tags_database.enc output/tags_database.enc`
 
+### 33) Style+Fix: 规范保存路径输入、添加命名模板中文动态预览、修复重试与复制按钮对比度样式
+- **变更文件**: `gui/main_window.py`、`gui/controller.py`、`gui/styles.py`
+- **背景与目标**: 优化用户的交互和视觉体验：① 允许手动修改和输入保存路径，并让长路径靠左对齐显示；② 在归档命名模板处新增直观的中文命名规则实时效果预览；③ 将“重试失败”按钮配色纠正为品牌橙色；④ 修复 macOS 下磁力链接“复制”按钮背景色失效导致的超低对比度问题。
+- **技术实施**:
+  - **路径输入自由编辑与左对齐**: 去除了 `path_input` 的 `setReadOnly(True)` 限制；并在 controller.py 中将 `path_input.textChanged` 连接至 `save_settings` 自动保存；同时在 load/browse 写入文本后调用 `setCursorPosition(0)` 强制令路径从头显示。
+  - **模板中文动态预览**: 在主界面高级命名模板输入框下方新增 `TemplateExampleLabel`，连接 `tmpl_input.textChanged` 信号，在输入框内容改变时自动将 `{actor}`, `{studio}`, `{code}`, `{title}`, `{year}`, `{date}` 用典型的中文测试数据（如"三上悠亚"、"S1"、"SSNI-001"）替换，实现秒级的实时预览。
+  - **微调按钮视觉呈现**: 将 `RetryFailedBtn` 边框调整为淡灰色，前景色设为品牌色 `#FF5924`，Hover 态增加背景微透橙色。同时为磁力复制按钮 `CopyMagnetBtn` 新增 `border: 1px solid #FF5924;` 强制触发 Qt 样式表绘制机制，解决 macOS 下默认按钮的遮罩覆盖引起按钮呈纯白色/无对比度的 Bug。
+- **风险自查**:
+  - 本次调整均属于局部 GUI 渲染及输入行为调优，无任何底层整理/刮削核心逻辑变动。
+- **回滚点**:
+  - `git checkout HEAD -- gui/main_window.py gui/controller.py gui/styles.py`
+
 
 
 

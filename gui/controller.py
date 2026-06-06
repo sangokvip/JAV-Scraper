@@ -103,6 +103,7 @@ class Controller:
         self.view.filter_group.buttonClicked.connect(self.apply_task_filter)
 
         # 自动配置自动保存机制
+        self.view.path_input.textChanged.connect(self.save_settings)
         self.view.tmpl_input.textChanged.connect(self.save_settings)
         self.view.chk_download_samples.toggled.connect(self.save_settings)
         self.view.chk_subtitle_tag.toggled.connect(self.save_settings)
@@ -487,7 +488,10 @@ class Controller:
         dir_path = QFileDialog.getExistingDirectory(self.view, "选择保存目标文件夹")
         if dir_path:
             abs_path = os.path.abspath(dir_path)
+            self.view.path_input.blockSignals(True)
             self.view.path_input.setText(abs_path)
+            self.view.path_input.setCursorPosition(0)
+            self.view.path_input.blockSignals(False)
             self.save_settings()
 
     def save_settings(self):
@@ -503,7 +507,10 @@ class Controller:
 
     def load_settings(self):
         settings = load_settings_backup()
+        self.view.path_input.blockSignals(True)
         self.view.path_input.setText(settings.get("output_dir", str(config.OUTPUT_DIR['root'])))
+        self.view.path_input.setCursorPosition(0)
+        self.view.path_input.blockSignals(False)
         self.view.tmpl_input.setText(settings.get("rename_template", "{actor}/{[code]} {title}"))
         self.view.chk_download_samples.setChecked(settings.get("download_samples", True))
         self.view.chk_subtitle_tag.setChecked(settings.get("write_subtitle_tag", True))

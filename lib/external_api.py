@@ -473,10 +473,11 @@ def search_videos(keyword: str, max_pages: int = 1, platform: str = None,
     adapter = get_adapter(platform)
     
     # 如果适配器支持 movie_type 参数
+    # 注意：适配器签名是 search_videos(keyword, page=1, max_pages=1)，必须用关键字传参
     if movie_type is not None:
-        return adapter.search_videos(keyword, max_pages, movie_type=movie_type, **kwargs)
-    
-    return adapter.search_videos(keyword, max_pages, **kwargs)
+        return adapter.search_videos(keyword, max_pages=max_pages, movie_type=movie_type, **kwargs)
+
+    return adapter.search_videos(keyword, max_pages=max_pages, **kwargs)
 
 
 def get_video_by_code(code: str, platform: str = None, 

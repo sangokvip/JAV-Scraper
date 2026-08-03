@@ -250,32 +250,44 @@ class JavdbAPI:
         kwargs.setdefault('allow_redirects', True)
         
         last_exception = None
-        
-        for retry in range(config.JAVDB['retry_times']):
+        last_status = None
+        # retry_times 表示"额外重试次数"；域名切换单独计数，不消耗重试额度
+        max_attempts = config.JAVDB['retry_times'] + 1
+        domain_count = max(len(config.JAVDB.get('domains') or []), 1)
+        domain_switches = 0
+
+        attempt = 0
+        while attempt < max_attempts:
             try:
                 self.request_count += 1
-                
+
                 if method.lower() == 'get':
                     response = self.session.get(url, **kwargs)
                 else:
                     response = self.session.post(url, **kwargs)
-                
+
                 if response.status_code == 200:
                     self.success_count += 1
                     return response
-                
-                if response.status_code in [403, 503]:
+
+                last_status = response.status_code
+                if response.status_code in [403, 503] and domain_switches < domain_count - 1:
                     self._switch_domain()
                     url = self._get_full_url(path)
+                    domain_switches += 1
+                    time.sleep(config.JAVDB.get('sleep_time', 2))
                     continue
-                
+
                 response.raise_for_status()
-                
+
             except Exception as e:
                 last_exception = e
-                time.sleep(2)
-        
-        raise Exception(f"请求失败: {last_exception}")
+                attempt += 1
+                if attempt < max_attempts:
+                    time.sleep(config.JAVDB.get('sleep_time', 2))
+
+        detail = last_exception if last_exception else f"HTTP {last_status}"
+        raise Exception(f"请求失败: {detail}")
     
     def get(self, path: str, **kwargs) -> requests.Response:
         """发送 GET 请求"""
@@ -403,21 +415,24 @@ class JavdbAPI:
                 return title
         return ""
     
+    # 与 _parse_work_item 保持一致：FC2(-PPV) 优先，否则标准"字母-数字"番号
+    CODE_PATTERN = r'(FC2(?:-?PPV)?-?\d+|[A-Z]{2,6}-?\d{2,5})'
+
     def _extract_code(self, soup: BeautifulSoup) -> str:
         """提取番号（字母+数字+中划线）"""
         copy_btn = soup.select_one('.panel-block.first-block .copy-to-clipboard')
         if copy_btn:
             code = copy_btn.get('data-clipboard-text', '')
-            if code and re.match(r'^[A-Z]+-?\d+$', code, re.I):
+            if code and re.match(rf'^{self.CODE_PATTERN}$', code, re.I):
                 return code.upper()
-        
+
         title_elem = soup.select_one('h1.title, .video-title')
         if title_elem:
             text = title_elem.get_text(strip=True)
-            match = re.search(r'([A-Z]{2,6}-?\d{2,5})', text, re.I)
+            match = re.search(self.CODE_PATTERN, text, re.I)
             if match:
                 return match.group(1).upper()
-        
+
         return ""
     
     def _extract_tags(self, soup: BeautifulSoup) -> List[str]:
@@ -866,45 +881,28 @@ class JavdbAPI:
         
         print(f"按标签筛选: {tags}")
         filtered_works = []
-        
+
+        # tag_ids 格式是 ['c1=23', 'c3=78']，作品的 tags 存的是标签名文本，
+        # 需要先经 tag_manager 把 ID 转成标签名再比对
+        required_names = []
+        if tag_ids:
+            for tag_id in tag_ids:
+                tag_info = self.tag_manager.get_tag_by_id(tag_id)
+                if tag_info:
+                    required_names.append(tag_info['name'])
+                else:
+                    print(f"⚠ 未知标签 ID: {tag_id}，忽略该筛选条件")
+        elif tag_names:
+            required_names = list(tag_names)
+
         for work in all_works:
             work_tags = work.get('tags', [])
-            
-            # 检查是否包含所有指定的标签
-            if isinstance(work_tags, list):
-                # 如果 tag_ids 格式是 ['c1=23', 'c3=78']
-                if tag_ids:
-                    tag_match = True
-                    for tag_id in tag_ids:
-                        tag_key, tag_value = tag_id.split('=')
-                        found = False
-                        for tag in work_tags:
-                            tag_str = str(tag)
-                            if tag_key == 'c1' and tag_value in tag_str:
-                                found = True
-                                break
-                            elif tag_key == 'c2' and tag_value in tag_str:
-                                found = True
-                                break
-                            elif tag_key == 'c3' and tag_value in tag_str:
-                                found = True
-                                break
-                            elif tag_key == 'c4' and tag_value in tag_str:
-                                found = True
-                                break
-                            elif tag_key == 'c5' and tag_value in tag_str:
-                                found = True
-                                break
-                        if not found:
-                            tag_match = False
-                            break
-                    if tag_match:
-                        filtered_works.append(work)
-                # 如果 tag_names 格式是 ['水手服', '美少女']
-                elif tag_names:
-                    tag_match = all(tag in str(work_tags) for tag in tag_names)
-                    if tag_match:
-                        filtered_works.append(work)
+
+            # 检查是否包含所有指定的标签（精确匹配，避免"少女"误中"美少女"）
+            if isinstance(work_tags, list) and required_names:
+                work_tag_set = {str(t) for t in work_tags}
+                if all(name in work_tag_set for name in required_names):
+                    filtered_works.append(work)
         
         print(f"筛选结果: {len(filtered_works)}/{len(all_works)} 个作品")
         
@@ -932,7 +930,7 @@ class JavdbAPI:
             video_title_elem = item.select_one('.video-title')
             if video_title_elem:
                 video_title_text = video_title_elem.get_text(strip=True)
-                code_match = re.search(r'(FC2(?:-?PPV)?-?\d+|[A-Z]{2,6}-?\d{2,5})', video_title_text, re.I)
+                code_match = re.search(self.CODE_PATTERN, video_title_text, re.I)
                 if code_match:
                     code = code_match.group(1).upper()
                 title = video_title_text

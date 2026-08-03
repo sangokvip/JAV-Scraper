@@ -12,7 +12,7 @@ from PySide6.QtGui import QPixmap, QGuiApplication
 from gui.main_window import MainWindow
 from gui.scrape_worker import ScrapeWorker
 from lib.code_extractor import extract_code
-from gui.folder_cleaner import clean_empty_parent_dirs
+from gui.folder_cleaner import clean_empty_parent_dirs, remove_empty_dir
 from gui.task_persister import (
     save_tasks_backup, load_tasks_backup,
     save_settings_backup, load_settings_backup
@@ -160,7 +160,7 @@ class Controller:
             self.view.table.setItem(row, 2, code_item)
 
             status_text = info.get("status", "等待中")
-            if status_text in ("开始执行", "准备中") or status_text.startswith("正在"):
+            if status_text in ("开始执行", "准备中", "整理中...") or status_text.startswith("正在"):
                 status_text = "等待中"
                 info["status"] = "等待中"
             status_item = QTableWidgetItem(status_text)
@@ -777,7 +777,7 @@ class Controller:
             info["status"] = "正在刮削..."
             self.view.table.setItem(info["row"], 3, QTableWidgetItem("正在刮削..."))
             
-            worker = ScrapeWorker(fp, info["code"], output_dir, "javdb", proxies, only_scrape=True, use_reverse_proxy=self.view.chk_use_reverse_proxy.isChecked())
+            worker = ScrapeWorker(fp, info["code"], output_dir, "javdb", proxies, only_scrape=True)
             self.start_worker(worker)
         self.save_backup()
         self.apply_task_filter()
@@ -898,7 +898,7 @@ class Controller:
             info["status"] = "正在刮削..."
             self.view.table.setItem(info["row"], 3, QTableWidgetItem("正在刮削..."))
             
-            worker = ScrapeWorker(fp, info["code"], output_dir, "javdb", proxies, only_scrape=True, use_reverse_proxy=self.view.chk_use_reverse_proxy.isChecked())
+            worker = ScrapeWorker(fp, info["code"], output_dir, "javdb", proxies, only_scrape=True)
             self.start_worker(worker)
         self.save_backup()
         self.apply_task_filter()
@@ -1115,7 +1115,7 @@ class Controller:
         all_done = True
         for fp, t_info in self.task_files.items():
             s = t_info.get("status", "")
-            if s in ("开始执行", "准备中") or s.startswith("正在"):
+            if s in ("开始执行", "准备中", "整理中...") or s.startswith("正在"):
                 all_done = False
                 break
 
@@ -1131,12 +1131,9 @@ class Controller:
                     QMessageBox.StandardButton.No
                 )
                 if reply == QMessageBox.StandardButton.Yes:
-                    import shutil
+                    # 只删真空目录（rmdir），确认期间新写入的文件会让删除自然失败
                     for pdir in empty_dirs:
-                        try:
-                            shutil.rmtree(pdir)
-                        except Exception as e:
-                            print(f"删除文件夹失败 {pdir}: {e}")
+                        remove_empty_dir(pdir)
             self.processed_parent_dirs.clear()
             self.save_backup()
 

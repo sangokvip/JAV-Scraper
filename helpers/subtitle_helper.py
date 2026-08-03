@@ -25,9 +25,12 @@ def find_matching_subtitles(video_path: str) -> list:
             
             entry_lower = entry.lower()
             if entry_lower.endswith(SUBTITLE_EXTENSIONS):
-                # 检查字幕基本名是否以视频基本名开头
+                # 字幕基本名必须与视频基本名完全一致，或后接 "."（语言后缀），
+                # 避免 ABC-1 误匹配 ABC-12 的字幕
                 entry_base, _ = os.path.splitext(entry)
-                if entry_base.lower().startswith(video_base_lower):
+                entry_base_lower = entry_base.lower()
+                if entry_base_lower == video_base_lower or \
+                        entry_base_lower.startswith(video_base_lower + '.'):
                     subtitles.append(entry_path)
     except Exception as e:
         print(f"扫描外挂字幕文件失败: {e}")
@@ -59,6 +62,10 @@ def move_and_rename_subtitles(video_path: str, target_video_path: str, subtitles
         target_sub_path = os.path.join(target_dir, target_sub_name)
         
         if os.path.abspath(sub_path) != os.path.abspath(target_sub_path):
+            # POSIX 上 rename 会静默覆盖，同名目标已存在时跳过以免丢字幕
+            if os.path.exists(target_sub_path):
+                print(f"目标字幕已存在，跳过: {target_sub_path}")
+                continue
             try:
                 os.rename(sub_path, target_sub_path)
                 moved_subs.append(target_sub_path)

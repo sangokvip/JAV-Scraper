@@ -48,5 +48,21 @@ def clean_empty_parent_dirs(parent_dirs) -> list[str]:
                 empty_dirs.append(abs_pdir)
         except Exception as e:
             print(f"检查文件夹空状态失败 {abs_pdir}: {e}")
-            
+
     return empty_dirs
+
+
+def remove_empty_dir(pdir: str) -> bool:
+    """
+    安全删除一个"空"目录：只清理已知垃圾文件后 rmdir。
+    目录在确认期间若被写入新文件，rmdir 会失败而不会误删。
+    """
+    try:
+        for item in os.listdir(pdir):
+            if item in (".DS_Store", "Thumbs.db"):
+                os.remove(os.path.join(pdir, item))
+        os.rmdir(pdir)
+        return True
+    except Exception as e:
+        print(f"删除文件夹失败 {pdir}: {e}")
+        return False

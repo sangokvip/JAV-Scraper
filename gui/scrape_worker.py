@@ -163,9 +163,15 @@ class ScrapeWorker(QRunnable):
                             elif self.conflict_resolution == "only_meta":
                                 pass # 不移动视频，继续往下做元数据写入
                             elif self.conflict_resolution == "keep_both":
-                                # 附带副本后缀
-                                target_video_name = f"{self.code}{cd_suffix}_副本{ext}"
-                                target_video_path = os.path.join(target_folder, target_video_name)
+                                # 附带副本后缀，探测到不存在的名字为止，避免覆盖旧副本
+                                copy_idx = 1
+                                while True:
+                                    copy_tag = "_副本" if copy_idx == 1 else f"_副本{copy_idx}"
+                                    target_video_name = f"{self.code}{cd_suffix}{copy_tag}{ext}"
+                                    target_video_path = os.path.join(target_folder, target_video_name)
+                                    if not os.path.exists(target_video_path):
+                                        break
+                                    copy_idx += 1
                             elif self.conflict_resolution == "overwrite":
                                 try:
                                     os.remove(target_video_path)

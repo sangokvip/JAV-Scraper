@@ -1,6 +1,6 @@
 """
-JAVDB API 配置文件示例
-复制此文件为 config.py 并填入你的账号信息
+JAVDB API 配置文件
+路径体系、站点参数与默认配置。凭证请勿直接提交到版本库。
 """
 
 import os
@@ -127,7 +127,8 @@ if not _cookie_user.exists() and _cookie_bundle.exists():
     except Exception as e:
         print(f"初始化复制 Cookie 文件失败: {e}")
 
-# 自动迁移历史配置文件逻辑
+# 自动迁移历史配置文件逻辑。
+# 注意：不在 import 时执行（避免副作用删改用户文件），由应用启动入口显式调用。
 def migrate_legacy_configs():
     # 原有的老配置文件位置 (在运行目录下)
     if getattr(sys, 'frozen', False):
@@ -159,15 +160,15 @@ def migrate_legacy_configs():
             except Exception as e:
                 print(f"迁移配置 {filename} 失败: {e}")
         
-        # 迁移完毕或新旧文件均存在时，安全清理老文件以防污染应用目录
+        # 仅当新旧文件内容一致时才清理老文件；内容不同（老文件可能更新）则保留，绝不静默删除
         if legacy_file.exists() and new_file.exists():
             try:
-                os.remove(str(legacy_file))
-                print(f"已清理历史残留文件: {legacy_file}")
-            except Exception as e:
+                import filecmp
+                if filecmp.cmp(str(legacy_file), str(new_file), shallow=False):
+                    os.remove(str(legacy_file))
+                    print(f"已清理历史残留文件: {legacy_file}")
+            except Exception:
                 pass
-
-migrate_legacy_configs()
 
 # 登录配置 - 请填入你的账号信息
 LOGIN = {

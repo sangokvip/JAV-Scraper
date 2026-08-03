@@ -58,3 +58,7 @@ tasks_backup.json
 malicious_code.nfo
 .DS_Store
 /docs
+
+# 构建产物
+icon.icns
+icon.ico

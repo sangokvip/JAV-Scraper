@@ -4,11 +4,29 @@
 """
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import List, Dict, Any
+from urllib.parse import urlparse
 from curl_cffi import requests
 from bs4 import BeautifulSoup
+
+
+def sanitize_filename(name: str, fallback: str = 'unnamed') -> str:
+    """
+    清理来自网页抓取的文件/目录名：剥掉路径成分，替换非法字符。
+    防止演员名/文件名含 `/` 或 `..` 时写出目标目录。
+    """
+    name = Path(str(name)).name
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', name).strip().strip('.')
+    return name or fallback
+
+
+def url_ext(url: str, default: str = 'jpg') -> str:
+    """从 URL 提取扩展名（先去 query 再取 suffix），异常值回退 default"""
+    ext = Path(urlparse(url).path).suffix.lstrip('.')
+    return ext if ext and len(ext) <= 5 and ext.isalnum() else default
 
 
 class JSONExporter:
@@ -43,7 +61,7 @@ class JSONExporter:
             "count": len(works)
         }
         
-        filename = self.output_dir / f"{actor_name}_works.json"
+        filename = self.output_dir / f"{sanitize_filename(actor_name)}_works.json"
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         
@@ -69,14 +87,14 @@ class ImageDownloader:
         if output_dir is None:
             import config
             output_dir = config.OUTPUT_DIR['images']
-        video_dir = Path(output_dir) / code
+        video_dir = Path(output_dir) / sanitize_filename(code)
         video_dir.mkdir(parents=True, exist_ok=True)
-        
+
         for i, url in enumerate(image_urls):
             try:
                 response = self.session.get(url, timeout=30)
                 if response.status_code == 200:
-                    ext = url.split('.')[-1].split('?')[0] or 'jpg'
+                    ext = url_ext(url)
                     file_path = video_dir / f"{i:03d}.{ext}"
                     with open(file_path, 'wb') as f:
                         f.write(response.content)
@@ -113,7 +131,7 @@ class ImageDownloader:
         if output_dir is None:
             import config
             output_dir = config.OUTPUT_DIR['images']
-        video_dir = Path(output_dir) / video_id
+        video_dir = Path(output_dir) / sanitize_filename(video_id)
         video_dir.mkdir(parents=True, exist_ok=True)
         
         downloaded = 0
@@ -125,12 +143,13 @@ class ImageDownloader:
             if not url:
                 continue
                 
-            # 使用自定义文件名或自动生成
+            # 使用自定义文件名或自动生成；filename 可能来自网页数据，必须消毒
             filename = img_info.get('filename')
-            if not filename:
-                ext = url.split('.')[-1].split('?')[0] or 'jpg'
-                filename = f"{i:03d}.{ext}"
-            
+            if filename:
+                filename = sanitize_filename(filename)
+            else:
+                filename = f"{i:03d}.{url_ext(url)}"
+
             file_path = video_dir / filename
             
             try:

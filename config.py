@@ -170,11 +170,19 @@ def migrate_legacy_configs():
             except Exception:
                 pass
 
-# 登录配置 - 请填入你的账号信息
+# 登录配置 — 凭证不要写进本文件（config.py 在版本库中，填入即泄漏）。
+# 优先读环境变量，其次读已被 .gitignore 排除的 config_local.py：
+#   # config_local.py
+#   LOGIN = {'username': 'xxx', 'password': 'yyy'}
 LOGIN = {
-    'username': '',  # 你的用户名
-    'password': '',  # 你的密码
+    'username': os.environ.get('JAVDB_USERNAME', ''),
+    'password': os.environ.get('JAVDB_PASSWORD', ''),
 }
+try:
+    from config_local import LOGIN as _local_login
+    LOGIN.update(_local_login)
+except ImportError:
+    pass
 
 # CSV 编码
 CSV_ENCODING = 'utf-8-sig'

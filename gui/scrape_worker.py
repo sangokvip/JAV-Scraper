@@ -108,10 +108,10 @@ class ScrapeWorker(QRunnable):
                 self.signals.progress.emit(self.file_path, "正在生成归档路径...")
                 target_folder = format_target_path(self.rename_template, self.output_dir, self.code, detail)
                 
-                # 安全防御
+                # 安全防御（commonpath 而非 startswith，避免 /out-backup 被误判在 /out 内）
                 abs_target = os.path.abspath(target_folder)
                 abs_output = os.path.abspath(self.output_dir)
-                if not abs_target.startswith(abs_output):
+                if os.path.commonpath([abs_target, abs_output]) != abs_output:
                     raise PermissionError(f"安全校验失败：目标路径试图跳出根保存目录 ({abs_target})")
                     
                 os.makedirs(target_folder, exist_ok=True)
@@ -201,7 +201,7 @@ class ScrapeWorker(QRunnable):
                 nfo_path = os.path.join(target_folder, f"{self.code}.nfo")
                 
                 abs_nfo = os.path.abspath(nfo_path)
-                if not abs_nfo.startswith(abs_output):
+                if os.path.commonpath([abs_nfo, abs_output]) != abs_output:
                     raise PermissionError(f"安全校验失败：NFO 写路径试图跳出根保存目录 ({abs_nfo})")
                 
                 # 是否判定为中文字幕

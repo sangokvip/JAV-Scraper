@@ -5,16 +5,55 @@ AV 在线播放服务器
 """
 
 from flask import Flask, request, Response, jsonify, send_from_directory
-from flask_cors import CORS
 from curl_cffi import requests as cffi_requests
+from urllib.parse import urlparse
+import ipaddress
+import threading
 import re
 import os
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# 播放页与 API 同源（127.0.0.1:5000），无需 CORS；
+# 若开启全局 CORS，任何网页都能借本机代理探测内网，属安全漏洞
 app = Flask(__name__, static_folder=SCRIPT_DIR, template_folder=SCRIPT_DIR)
-CORS(app)
 
 PROXY = None
+
+# ==================== 代理目标白名单 ====================
+# 静态白名单：已知数据源与视频 CDN
+ALLOWED_HOST_SUFFIXES = (
+    'surrit.com', 'missav.ai', 'missav.ws', 'missav.com', 'jable.tv',
+)
+# 动态白名单：提取器解析页面时发现的视频 CDN 域名（如 jable 的第三方 CDN）。
+# 只有服务端提取流程注册过的域名才可被代理，浏览器无法自行扩充。
+_dynamic_hosts = set()
+_dynamic_hosts_lock = threading.Lock()
+
+
+def _register_proxy_host(url: str):
+    """将提取器发现的流媒体 URL 域名加入动态白名单"""
+    host = urlparse(url).hostname
+    if host:
+        with _dynamic_hosts_lock:
+            _dynamic_hosts.add(host.lower())
+
+
+def _host_allowed(host: str) -> bool:
+    """代理目标校验：拒绝 IP 直连/本机/内网，只允许白名单域名"""
+    if not host:
+        return False
+    host = host.lower().rstrip('.')
+    try:
+        ipaddress.ip_address(host)
+        return False  # 一律拒绝 IP 直连，杜绝内网/云元数据探测
+    except ValueError:
+        pass
+    if host == 'localhost' or host.endswith('.local'):
+        return False
+    if any(host == s or host.endswith('.' + s) for s in ALLOWED_HOST_SUFFIXES):
+        return True
+    with _dynamic_hosts_lock:
+        return host in _dynamic_hosts
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -144,13 +183,17 @@ def extract_from_jable(avid: str, domain: str = 'jable.tv'):
                 'url': m.group(3).strip()
             })
         
+        # jable 的流可能落在任意第三方 CDN，域名由服务端提取流程注册进白名单
+        _register_proxy_host(m3u8_url)
+
         if streams:
             streams.sort(key=lambda x: x['bandwidth'], reverse=True)
-            
+
             base_url = m3u8_url.rsplit('/', 1)[0]
             for s in streams:
                 if not s['url'].startswith('http'):
                     s['url'] = f"{base_url}/{s['url']}"
+                _register_proxy_host(s['url'])
                 encoded_url = base64.b64encode(s['url'].encode('utf-8')).decode('utf-8')
                 s['proxy_url'] = f"/proxy2?url={encoded_url}"
         else:
@@ -218,11 +261,14 @@ def proxy_request(domain, path):
     import base64
     from flask import make_response
     
+    if not _host_allowed(domain):
+        return Response('Domain not allowed', status=403)
+
     query_string = request.query_string.decode()
     target_url = f"https://{domain}/{path}"
     if query_string:
         target_url += f"?{query_string}"
-    
+
     referer = request.headers.get('Referer', '')
     origin = None
     if 'jable' in domain:
@@ -270,9 +316,10 @@ def proxy_request(domain, path):
         response = make_response(content)
         response.status_code = resp.status_code
         
-        excluded = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        # 只透传播放必需的响应头，避免上游 Set-Cookie / Access-Control-* 泄漏到本机
+        allowed_headers = ['content-type', 'cache-control', 'expires', 'accept-ranges', 'content-range']
         for n, v in resp.headers.items():
-            if n.lower() not in excluded:
+            if n.lower() in allowed_headers:
                 response.headers[n] = v
         
         return response
@@ -311,9 +358,12 @@ def proxy_request2():
     
     if not url.startswith('http://') and not url.startswith('https://'):
         url = f'https://{url}'
-    
+
     parsed = urlparse(url)
-    
+
+    if not _host_allowed(parsed.hostname):
+        return Response('Domain not allowed', status=403)
+
     referer = request.headers.get('Referer', '')
     origin = None
     if 'jable' in parsed.netloc:
@@ -378,9 +428,10 @@ def proxy_request2():
         response = make_response(content)
         response.status_code = resp.status_code
         
-        excluded = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        # 只透传播放必需的响应头，避免上游 Set-Cookie / Access-Control-* 泄漏到本机
+        allowed_headers = ['content-type', 'cache-control', 'expires', 'accept-ranges', 'content-range']
         for n, v in resp.headers.items():
-            if n.lower() not in excluded:
+            if n.lower() in allowed_headers:
                 response.headers[n] = v
         
         return response

@@ -231,8 +231,15 @@ WxfOVU11nGDFZ79PnSUnPdkhvwY7ptpqqsm1lrlKO%2F2yuTDVmCno%2FOtDT8FC%2BoiFT2IXNobjsS
             # 处理截图请求
             import os
             screenshot_path = self.path.replace('/screenshots/', '')
-            full_path = Path(__file__).parent / 'screenshots' / screenshot_path
-            
+            screenshots_dir = (Path(__file__).parent / 'screenshots').resolve()
+            full_path = (screenshots_dir / screenshot_path).resolve()
+
+            # 防路径遍历：解析后必须仍在 screenshots 目录内
+            if screenshots_dir not in full_path.parents and full_path != screenshots_dir:
+                self.send_response(404)
+                self.end_headers()
+                return
+
             if full_path.exists() and full_path.is_file():
                 # 确定文件类型
                 if screenshot_path.endswith('.png'):
@@ -261,6 +268,19 @@ WxfOVU11nGDFZ79PnSUnPdkhvwY7ptpqqsm1lrlKO%2F2yuTDVmCno%2FOtDT8FC%2BoiFT2IXNobjsS
     def do_POST(self):
         """处理 POST 请求"""
         if self.path == '/save-cookies':
+            # 防 CSRF：只接受本页面（同源）发起的写入。
+            # 跨站的 fetch 会带上外站 Origin；text/plain 简单请求不触发预检，必须显式校验。
+            origin = self.headers.get('Origin', '')
+            host = self.headers.get('Host', '')
+            if origin and origin not in (f'http://{host}', f'http://localhost:{self.server.server_port}',
+                                         f'http://127.0.0.1:{self.server.server_port}'):
+                self.send_response(403)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': 'Forbidden origin'}).encode('utf-8'))
+                print(f"❌ 拒绝跨站 cookie 写入请求，Origin: {origin}")
+                return
+
             # 保存 cookies
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)

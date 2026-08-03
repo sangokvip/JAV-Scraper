@@ -44,7 +44,7 @@ import re
 import json
 import time
 from typing import List, Dict, Optional, Any
-from urllib.parse import urljoin, quote
+from urllib.parse import urljoin, quote, urlparse, parse_qs
 from pathlib import Path
 from datetime import datetime
 
@@ -81,7 +81,8 @@ class JavdbAPI:
             proxies: 代理配置字典，如 {"http": "...", "https": "..."}
         """
         self.domain_index = self.normalize_domain_index(domain_index)
-        self.session = requests.Session()
+        # impersonate: 启用 curl_cffi 的 TLS 指纹伪装，显著降低 Cloudflare 403 概率
+        self.session = requests.Session(impersonate="chrome120")
         if proxies:
             self.session.proxies = proxies
         self.session.headers.update(config.HEADERS)
@@ -395,13 +396,26 @@ class JavdbAPI:
         items = soup.select('div.item a')
         if not items:
             return None
-        
-        first_item = items[0]
-        work = self._parse_work_item(first_item)
-        
+
+        # 优先取 code 精确相等的结果：模糊搜索首条可能是别的番号（搜 ABP-1 命中 ABP-100）
+        target = code.strip().upper()
+        work = None
+        fallback = None
+        for item in items:
+            parsed = self._parse_work_item(item)
+            if not parsed:
+                continue
+            if fallback is None:
+                fallback = parsed
+            if parsed.get('code', '').upper() == target:
+                work = parsed
+                break
+        if work is None:
+            work = fallback
+
         if not work:
             return None
-        
+
         return self.get_video_detail(work['video_id'], download_images)
     
     def _extract_title(self, soup: BeautifulSoup) -> str:
@@ -539,7 +553,7 @@ class JavdbAPI:
                     'size_text': size_text,
                     'size_mb': size_mb,
                 })
-            except:
+            except Exception:
                 continue
         
         magnets.sort(key=lambda x: x['size_mb'], reverse=True)
@@ -573,12 +587,13 @@ class JavdbAPI:
     
     def _parse_size(self, size_text: str) -> float:
         """解析文件大小为 MB"""
-        match = re.search(r'([\d.]+)\s*(GB|MB)', size_text, re.I)
+        match = re.search(r'(\d+(?:\.\d+)?)\s*(TB|GB|MB|KB)', size_text, re.I)
         if not match:
             return 0
         size = float(match[1])
         unit = match[2].upper()
-        return size * 1024 if unit == 'GB' else size
+        factor = {'TB': 1024 * 1024, 'GB': 1024, 'MB': 1, 'KB': 1 / 1024}[unit]
+        return size * factor
     
     # ==================== 演员搜索 ====================
     
@@ -657,7 +672,7 @@ class JavdbAPI:
                     'actor_url': urljoin(self.base_url, href),
                     'aliases': names,
                 })
-            except:
+            except Exception:
                 continue
         
         exact_name = normalized_actor_name.casefold()
@@ -707,7 +722,7 @@ class JavdbAPI:
                 work = self._parse_work_item(item)
                 if work:
                     works.append(work)
-            except:
+            except Exception:
                 continue
         
         next_btn = soup.select_one('nav.pagination a[rel="next"]')
@@ -756,7 +771,7 @@ class JavdbAPI:
                 detail = self.get_video_detail(work['video_id'], download_images)
                 full_work = DataProcessor.merge_video_detail(work, detail)
                 full_works.append(full_work)
-            except:
+            except Exception:
                 full_works.append(work)
             time.sleep(config.JAVDB['sleep_time'])
         
@@ -838,12 +853,15 @@ class JavdbAPI:
         else:
             tags = []
         
-        # 生成临时文件路径
+        # 生成临时文件路径：
+        # - 写到 DATA_DIR 而非 CWD（打包态 CWD 可能是只读目录）
+        # - 缓存键包含影响抓取结果的参数，避免参数变了仍读旧缓存
         if not temp_file:
-            temp_file = f"temp_actor_{actor_id}_works.json"
-        
+            need_details_key = 'd' if (get_details or tags) else 'b'
+            temp_file = str(config.DATA_DIR / f"temp_actor_{actor_id}_p{max_pages}_{need_details_key}_works.json")
+
         temp_path = Path(temp_file)
-        
+
         # 检查临时文件是否存在
         if temp_path.exists():
             print(f"从临时文件加载: {temp_file}")
@@ -965,7 +983,7 @@ class JavdbAPI:
             }
             
             return result
-        except:
+        except Exception:
             return None
     
     # ==================== Tag 作品（分页） ====================
@@ -1011,7 +1029,7 @@ class JavdbAPI:
                 work = self._parse_work_item(item)
                 if work:
                     works.append(work)
-            except:
+            except Exception:
                 continue
         
         next_btn = soup.select_one('nav.pagination a[rel="next"]')
@@ -1060,7 +1078,7 @@ class JavdbAPI:
                 detail = self.get_video_detail(work['video_id'], download_images)
                 full_work = DataProcessor.merge_video_detail(work, detail)
                 full_works.append(full_work)
-            except:
+            except Exception:
                 full_works.append(work)
             time.sleep(config.JAVDB['sleep_time'])
         
@@ -1181,7 +1199,7 @@ class JavdbAPI:
                 work = self._parse_work_item(item)
                 if work:
                     works.append(work)
-            except:
+            except Exception:
                 continue
         
         next_btn = soup.select_one('nav.pagination a[rel="next"]')
@@ -1244,7 +1262,7 @@ class JavdbAPI:
                 detail = self.get_video_detail(work['video_id'], download_images)
                 full_work = DataProcessor.merge_video_detail(work, detail)
                 full_works.append(full_work)
-            except:
+            except Exception:
                 full_works.append(work)
             time.sleep(config.JAVDB['sleep_time'])
         
@@ -1283,7 +1301,7 @@ class JavdbAPI:
                 work = self._parse_work_item(item)
                 if work:
                     videos.append(work)
-            except:
+            except Exception:
                 continue
         
         # 检查是否有下一页
@@ -1338,6 +1356,15 @@ class JavdbAPI:
     
     # ==================== 用户清单功能 ====================
     
+    def _check_login_required(self, response, soup: BeautifulSoup):
+        """
+        用户清单页在未登录时会被重定向到登录页，直接解析会得到空列表，
+        与"清单确实为空"无法区分。这里显式抛错让调用方感知。
+        """
+        final_url = str(getattr(response, 'url', '') or '')
+        if '/login' in final_url or soup.select_one('form[action*="/login"], form[action*="sessions"]'):
+            raise PermissionError("未登录或登录已过期，请先更新 Cookie / 重新登录")
+
     def get_want_watch_videos(self, page: int = 1) -> Dict:
         """
         获取用户的想看清单
@@ -1368,6 +1395,7 @@ class JavdbAPI:
         
         response = self.get(url)
         soup = BeautifulSoup(response.text, 'lxml')
+        self._check_login_required(response, soup)
         
         works = []
         items = soup.select('div.item a')
@@ -1377,7 +1405,7 @@ class JavdbAPI:
                 work = self._parse_work_item(item)
                 if work:
                     works.append(work)
-            except:
+            except Exception:
                 continue
         
         next_btn = soup.select_one('nav.pagination a[rel="next"]')
@@ -1419,6 +1447,7 @@ class JavdbAPI:
         
         response = self.get(url)
         soup = BeautifulSoup(response.text, 'lxml')
+        self._check_login_required(response, soup)
         
         works = []
         items = soup.select('div.item a')
@@ -1428,7 +1457,7 @@ class JavdbAPI:
                 work = self._parse_work_item(item)
                 if work:
                     works.append(work)
-            except:
+            except Exception:
                 continue
         
         next_btn = soup.select_one('nav.pagination a[rel="next"]')
@@ -1465,10 +1494,11 @@ class JavdbAPI:
         url = f"/users/lists"
         if page > 1:
             url = f"/users/lists?page={page}"
-        
+
         response = self.get(url)
         soup = BeautifulSoup(response.text, 'lxml')
-        
+        self._check_login_required(response, soup)
+
         lists = []
         list_items = soup.select('li.list-item')
         
@@ -1479,7 +1509,8 @@ class JavdbAPI:
                     continue
                 
                 href = link.get('href', '')
-                list_id = href.split('id=')[-1] if 'id=' in href else ''
+                # 用 parse_qs 取 id，避免 "id=xxx&page=2" 把 &page=2 一并带进 list_id
+                list_id = parse_qs(urlparse(href).query).get('id', [''])[0]
                 
                 name_elem = item.select_one('.list-name')
                 list_name = name_elem.get_text(strip=True) if name_elem else ''
@@ -1498,7 +1529,7 @@ class JavdbAPI:
                     'list_url': f"{self.base_url}{href}",
                     'video_count': video_count
                 })
-            except:
+            except Exception:
                 continue
         
         next_btn = soup.select_one('nav.pagination a[rel="next"]')
@@ -1589,7 +1620,7 @@ class JavdbAPI:
                 work = self._parse_work_item(item)
                 if work:
                     works.append(work)
-            except:
+            except Exception:
                 continue
         
         next_btn = soup.select_one('nav.pagination a[rel="next"]')

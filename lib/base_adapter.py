@@ -3,6 +3,7 @@
 定义所有适配器必须实现的接口
 """
 
+import re
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
@@ -190,11 +191,19 @@ class BaseAdapter(ABC):
         """
         # 标签去重和ID生成
         tag_name_to_id = {}
-        tag_id_counter = 1
-        
+
         # 处理已有标签
         for tag in self.existing_tags:
             tag_name_to_id[tag["name"]] = tag["id"]
+
+        # 计数器从已有标签的最大序号之后开始，避免新标签 ID 与旧 ID 撞车
+        # （增量合并时 tag_001 已存在，若从 1 重数会把新标签映射到旧 ID）
+        max_existing = 0
+        for existing_id in tag_name_to_id.values():
+            m = re.search(r'_(\d+)$', str(existing_id))
+            if m:
+                max_existing = max(max_existing, int(m.group(1)))
+        tag_id_counter = max_existing + 1
         
         new_tags = []
         standard_videos = []

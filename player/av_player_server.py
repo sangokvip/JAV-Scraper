@@ -61,6 +61,34 @@ HEADERS = {
     'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
 }
 
+def _parse_m3u8_streams(m3u8_text: str) -> list:
+    """
+    解析主清单里的变体流。逐行取 #EXT-X-STREAM-INF 再分别提取属性——
+    HLS 规范不保证 BANDWIDTH/RESOLUTION 的先后顺序，整行正则会漏匹配。
+    """
+    streams = []
+    lines = m3u8_text.split('\n')
+    for i, line in enumerate(lines):
+        if not line.startswith('#EXT-X-STREAM-INF:'):
+            continue
+        bw_match = re.search(r'BANDWIDTH=(\d+)', line)
+        res_match = re.search(r'RESOLUTION=(\d+x\d+)', line)
+        # 下一非空行即该变体的 URI
+        uri = ''
+        for next_line in lines[i + 1:]:
+            stripped = next_line.strip()
+            if stripped and not stripped.startswith('#'):
+                uri = stripped
+                break
+        if uri:
+            streams.append({
+                'bandwidth': int(bw_match.group(1)) if bw_match else 0,
+                'resolution': res_match.group(1) if res_match else 'unknown',
+                'url': uri,
+            })
+    return streams
+
+
 def extract_from_missav(avid: str, domain: str = 'missav.ai'):
     """从 MissAV 提取 m3u8"""
     headers = {**HEADERS, 'Referer': f'https://{domain}/'}
@@ -107,15 +135,7 @@ def extract_from_missav(avid: str, domain: str = 'missav.ai'):
         if pl_resp.status_code != 200:
             return None, "无法获取播放列表"
         
-        streams = []
-        pattern = re.compile(r'#EXT-X-STREAM-INF:BANDWIDTH=(\d+),.*?RESOLUTION=(\d+x\d+).*?\n(.*)')
-        
-        for match in pattern.finditer(pl_resp.text):
-            streams.append({
-                'bandwidth': int(match.group(1)),
-                'resolution': match.group(2),
-                'url': match.group(3).strip()
-            })
+        streams = _parse_m3u8_streams(pl_resp.text)
         
         if not streams:
             return None, "未找到视频流"
@@ -173,15 +193,7 @@ def extract_from_jable(avid: str, domain: str = 'jable.tv'):
         if m3u8_resp.status_code != 200:
             return None, "无法获取 m3u8 内容"
         
-        streams = []
-        pattern = re.compile(r'#EXT-X-STREAM-INF:BANDWIDTH=(\d+),.*?RESOLUTION=(\d+x\d+).*?\n(.*)')
-        
-        for m in pattern.finditer(m3u8_resp.text):
-            streams.append({
-                'bandwidth': int(m.group(1)),
-                'resolution': m.group(2),
-                'url': m.group(3).strip()
-            })
+        streams = _parse_m3u8_streams(m3u8_resp.text)
         
         # jable 的流可能落在任意第三方 CDN，域名由服务端提取流程注册进白名单
         _register_proxy_host(m3u8_url)
@@ -303,7 +315,11 @@ def proxy_request(domain, path):
                 stripped = line.strip()
                 if stripped and not stripped.startswith('#'):
                     if not stripped.startswith('http://') and not stripped.startswith('https://'):
-                        new_lines.append(f"/proxy/{domain}{urlparse(base_url).path}/{stripped}")
+                        if stripped.startswith('/'):
+                            # host 绝对路径段：直接拼域名，不能再叠加 base_path
+                            new_lines.append(f"/proxy/{domain}{stripped}")
+                        else:
+                            new_lines.append(f"/proxy/{domain}{urlparse(base_url).path}/{stripped}")
                     else:
                         parsed = urlparse(stripped)
                         encoded_url = base64.b64encode(stripped.encode('utf-8')).decode('utf-8')
@@ -398,7 +414,8 @@ def proxy_request2():
                 key_uri = m.group(2)
                 
                 if not key_uri.startswith('http://') and not key_uri.startswith('https://'):
-                    full_key_url = f"{base_url}/{key_uri}"
+                    # urljoin 正确处理相对路径与 host 绝对路径（以 / 开头）两种情况
+                    full_key_url = urljoin(url, key_uri)
                     encoded_key_url = base64.b64encode(full_key_url.encode('utf-8')).decode('utf-8')
                     proxy_key_url = f"/proxy2?url={encoded_key_url}"
                     return full_match.replace(key_uri, proxy_key_url)
@@ -407,7 +424,7 @@ def proxy_request2():
             
             def replace_ts_uri(uri):
                 if not uri.startswith('http://') and not uri.startswith('https://'):
-                    full_ts_url = f"{base_url}/{uri}"
+                    full_ts_url = urljoin(url, uri)
                     encoded_ts_url = base64.b64encode(full_ts_url.encode('utf-8')).decode('utf-8')
                     return f"/proxy2?url={encoded_ts_url}"
                 return uri

@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import traceback
 import requests
@@ -35,6 +36,38 @@ class ScrapeWorker(QRunnable):
         self.signals = WorkerSignals()
         self.is_cancelled = False
 
+    def _copy_file_cancellable(self, src: str, dst: str, chunk_size: int = 16 * 1024 * 1024):
+        """
+        分块复制，块间检查取消标记。
+        被取消时删除写了一半的目标文件后返回（不删源文件）。
+        """
+        total = os.path.getsize(src)
+        copied = 0
+        try:
+            with open(src, 'rb') as fsrc, open(dst, 'wb') as fdst:
+                while True:
+                    if self.is_cancelled:
+                        break
+                    chunk = fsrc.read(chunk_size)
+                    if not chunk:
+                        break
+                    fdst.write(chunk)
+                    copied += len(chunk)
+                    if total > 0:
+                        self.signals.progress.emit(
+                            self.file_path, f"正在跨盘复制影片... {copied * 100 // total}%")
+        except Exception:
+            try:
+                os.remove(dst)
+            except OSError:
+                pass
+            raise
+        if self.is_cancelled:
+            try:
+                os.remove(dst)
+            except OSError:
+                pass
+
     def run(self):
         self.signals.started.emit(self.file_path)
         try:
@@ -50,8 +83,11 @@ class ScrapeWorker(QRunnable):
                 if ".." in self.code or "/" in self.code or "\\" in self.code:
                     raise PermissionError(f"安全校验失败：检测到恶意番号或路径穿越符号 ({self.code})")
 
+                last_error = None
                 if self.cached_detail:
-                    detail = self.cached_detail
+                    # 浅拷贝：cached_detail 与主线程共享同一对象，
+                    # 工作线程直接改（如清空 magnets）会与预览渲染竞争
+                    detail = dict(self.cached_detail)
                     self.signals.progress.emit(self.file_path, "使用已缓存的刮削数据...")
                 else:
                     detail = None
@@ -67,6 +103,7 @@ class ScrapeWorker(QRunnable):
                         )
                         detail = adapter.get_video_by_code(self.code)
                     except Exception as scrape_err:
+                        last_error = scrape_err
                         print(f"[JAVDB] 刮削过程中发生网络异常: {scrape_err}")
 
                     # 若 JAVDB 刮削失败或返回空，降级回退至 JAV321 直连
@@ -82,10 +119,15 @@ class ScrapeWorker(QRunnable):
                             if detail:
                                 self.signals.progress.emit(self.file_path, "成功从 JAV321 平台获取到刮削数据。")
                         except Exception as fallback_err:
+                            last_error = fallback_err
                             print(f"[JAV321] 降级刮削也失败: {fallback_err}")
 
                 if not detail:
-                    self.signals.finished.emit(self.file_path, f"在平台中找不到番号: {self.code}")
+                    # 区分"确实查不到"与"网络/代理异常"，否则用户无从排查
+                    if last_error is not None:
+                        self.signals.finished.emit(self.file_path, f"刮削失败 ({last_error})")
+                    else:
+                        self.signals.finished.emit(self.file_path, f"在平台中找不到番号: {self.code}")
                     return
 
                 if self.is_cancelled:
@@ -144,11 +186,11 @@ class ScrapeWorker(QRunnable):
                             
                         # 智能多 CD 命名规则
                         cd_suffix = ""
-                        # 先尝试匹配原文件名中已有的分段标记
-                        for cd_keyword in ["-cd1", "-cd2", "-cd3", "_cd1", "_cd2", "_a", "_b"]:
-                            if cd_keyword in os.path.basename(v_path).lower():
-                                cd_suffix = cd_keyword.upper().replace("_", "-")
-                                break
+                        # 只匹配文件名"末尾"的分段标记，避免 file_backup.mp4 里的 _b 误判
+                        base_no_ext = os.path.splitext(os.path.basename(v_path))[0].lower()
+                        cd_match = re.search(r'[-_](cd\d+|[ab])$', base_no_ext)
+                        if cd_match:
+                            cd_suffix = f"-{cd_match.group(1).upper()}"
                         # 如果没有分段标记但确实有多个视频，按索引分段
                         if not cd_suffix and len(video_files) > 1:
                             cd_suffix = f"-CD{idx+1}"
@@ -184,7 +226,11 @@ class ScrapeWorker(QRunnable):
                                 os.rename(v_path, target_video_path)
                             except Exception:
                                 try:
-                                    shutil.copyfile(v_path, target_video_path)
+                                    # 跨盘降级为分块复制：几十 GB 的文件期间可响应取消
+                                    self._copy_file_cancellable(v_path, target_video_path)
+                                    if self.is_cancelled:
+                                        self.signals.finished.emit(self.file_path, "cancelled")
+                                        return
                                     os.remove(v_path)
                                 except Exception as move_err:
                                     raise OSError(move_err.errno if hasattr(move_err, 'errno') else 1, f"移动视频失败: {move_err}")

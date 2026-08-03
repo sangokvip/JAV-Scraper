@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
+from utils import url_ext
 from .base_adapter import BaseAdapter
 from .platform import Platform
 
@@ -285,7 +286,7 @@ class Jav321Adapter(BaseAdapter):
                     try:
                         r = requests.get(img_url, headers=headers, proxies=self.proxies, timeout=10)
                         if r.status_code == 200:
-                            ext = img_url.split('.')[-1].split('?')[0] or 'jpg'
+                            ext = url_ext(img_url)
                             file_path = video_dir / f"{idx:03d}.{ext}"
                             with open(file_path, 'wb') as f:
                                 f.write(r.content)
@@ -296,7 +297,7 @@ class Jav321Adapter(BaseAdapter):
                 # 直连下载
                 r = requests.get(img_url, headers=headers, timeout=10)
                 if r.status_code == 200:
-                    ext = img_url.split('.')[-1].split('?')[0] or 'jpg'
+                    ext = url_ext(img_url)
                     file_path = video_dir / f"{idx:03d}.{ext}"
                     with open(file_path, 'wb') as f:
                         f.write(r.content)

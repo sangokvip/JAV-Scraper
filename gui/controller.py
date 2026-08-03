@@ -2,7 +2,8 @@ import os
 import json
 import requests
 import config
-from PySide6.QtCore import QThreadPool, Qt, Signal, QRunnable, QObject
+from collections import OrderedDict
+from PySide6.QtCore import QThreadPool, Qt, Signal, QRunnable, QObject, QTimer
 from PySide6.QtWidgets import (
     QTableWidgetItem, QMessageBox, QFileDialog, QDialog, QVBoxLayout, 
     QHBoxLayout, QLabel, QTextEdit, QPushButton, QProgressBar, QWidget, QMenu
@@ -78,7 +79,25 @@ class Controller:
         self.active_workers = set()
         self.running_scrape_workers = {}
         self.image_session = requests.Session()
-        self.pixmap_cache = {}  # 强引用缩放图片缓存：(path_or_url, w, h) -> QPixmap
+        # LRU 缩放图片缓存：(path_or_url, w, h) -> QPixmap，超上限淘汰最久未用项
+        self.pixmap_cache = OrderedDict()
+        self.pixmap_cache_max = 300
+        self._pending_image_urls = set()  # 正在下载中的 (filepath, url)，防重复下载
+        self._cleanup_prompt_showing = False
+
+        # 备份/设置写盘防抖：textChanged 每键一次全量 json.dump 会拖卡 UI
+        self._save_settings_timer = QTimer()
+        self._save_settings_timer.setSingleShot(True)
+        self._save_settings_timer.setInterval(400)
+        self._save_settings_timer.timeout.connect(self._do_save_settings)
+        self._save_backup_timer = QTimer()
+        self._save_backup_timer.setSingleShot(True)
+        self._save_backup_timer.setInterval(400)
+        self._save_backup_timer.timeout.connect(self._do_save_backup)
+        # 退出时冲刷未落盘的防抖写入
+        _app = QGuiApplication.instance()
+        if _app is not None:
+            _app.aboutToQuit.connect(self._flush_pending_saves)
 
         # 信号槽绑定
         self.view.files_dropped.connect(self.handle_files_dropped)
@@ -121,7 +140,40 @@ class Controller:
         self.restore_backup_tasks()
 
     def save_backup(self):
+        """防抖：400ms 内多次调用只落盘一次"""
+        self._save_backup_timer.start()
+
+    def _do_save_backup(self):
         save_tasks_backup(self.task_files)
+
+    def _cache_pixmap(self, key, pix):
+        """写入 LRU 缓存并按上限淘汰"""
+        cache = self.pixmap_cache
+        if key in cache:
+            cache.move_to_end(key)
+        cache[key] = pix
+        while len(cache) > self.pixmap_cache_max:
+            cache.popitem(last=False)
+
+    def _start_image_worker(self, filepath, url, is_poster):
+        """去重启动图片下载：同一 (filepath, url) 只允许一个在途 worker"""
+        if (filepath, url) in self._pending_image_urls:
+            return
+        self._pending_image_urls.add((filepath, url))
+        proxies = self.get_active_proxies()
+        worker = ImageLoadWorker(filepath, url, proxies, self.image_session, is_poster=is_poster)
+        worker.signals.loaded.connect(self.on_network_image_loaded)
+        worker.signals.finished_worker.connect(self.on_worker_destroyed)
+        self.active_workers.add(worker)
+        self.thread_pool.start(worker)
+
+    def _flush_pending_saves(self):
+        if self._save_settings_timer.isActive():
+            self._save_settings_timer.stop()
+            self._do_save_settings()
+        if self._save_backup_timer.isActive():
+            self._save_backup_timer.stop()
+            self._do_save_backup()
 
     def restore_backup_tasks(self):
         restored = load_tasks_backup()
@@ -210,6 +262,8 @@ class Controller:
                 ungrouped_files.append(file_path)
 
         added_primary_files = []
+        # 无输出路径时不会启动刮削，状态必须如实标"等待中"，否则任务卡死
+        initial_status = "正在刮削..." if self.view.path_input.text().strip() else "等待中"
 
         # 1. 导入有号码的影片分组
         for code, file_list in grouped_files.items():
@@ -253,7 +307,7 @@ class Controller:
                 code_item = QTableWidgetItem(code)
                 self.view.table.setItem(row, 2, code_item)
 
-                status_item = QTableWidgetItem("正在刮削...")
+                status_item = QTableWidgetItem(initial_status)
                 status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self.view.table.setItem(row, 3, status_item)
 
@@ -261,7 +315,7 @@ class Controller:
                     "code": code,
                     "row": row,
                     "detail": None,
-                    "status": "正在刮削...",
+                    "status": initial_status,
                     "extra_files": extra_files
                 }
                 added_primary_files.append(primary_path)
@@ -335,7 +389,8 @@ class Controller:
             proxies = self.get_active_proxies()
             added_any = False
             first_row = None
-            
+            initial_status = "正在刮削..." if output_dir else "等待中"
+
             for code in codes:
                 virtual_path = f"__virtual__:{code}"
                 if virtual_path in self.task_files:
@@ -352,15 +407,15 @@ class Controller:
                 self.view.table.setItem(row, 1, name_item)
                 code_item = QTableWidgetItem(code)
                 self.view.table.setItem(row, 2, code_item)
-                status_item = QTableWidgetItem("正在刮削...")
+                status_item = QTableWidgetItem(initial_status)
                 status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self.view.table.setItem(row, 3, status_item)
-                
+
                 self.task_files[virtual_path] = {
                     "code": code,
                     "row": row,
                     "detail": None,
-                    "status": "正在刮削...",
+                    "status": initial_status,
                     "extra_files": []
                 }
                 if output_dir:
@@ -413,15 +468,16 @@ class Controller:
             
             if target_fp and new_code:
                 info = self.task_files[target_fp]
-                info["status"] = "正在刮削..."
-                
+                output_dir = self.view.path_input.text().strip()
+                new_status = "正在刮削..." if output_dir else "等待中"
+                info["status"] = new_status
+
                 status_item = self.view.table.item(row, 3)
                 if status_item:
-                    status_item.setText("正在刮削...")
-                
+                    status_item.setText(new_status)
+
                 self.save_backup()
-                
-                output_dir = self.view.path_input.text().strip()
+
                 if output_dir:
                     proxies = self.get_active_proxies()
                     worker = ScrapeWorker(target_fp, new_code, output_dir, "javdb", proxies, only_scrape=True)
@@ -495,6 +551,10 @@ class Controller:
             self.save_settings()
 
     def save_settings(self):
+        """防抖：输入框每键触发，400ms 静默后才真正写盘"""
+        self._save_settings_timer.start()
+
+    def _do_save_settings(self):
         settings = {
             "output_dir": self.view.path_input.text().strip(),
             "rename_template": self.view.tmpl_input.text().strip(),
@@ -523,19 +583,26 @@ class Controller:
             return {"http": proxy, "https": proxy} if proxy else None
         return None
 
+    def _detach_worker(self, worker):
+        """
+        取消 worker 并断开 UI 相关信号。
+        finished_worker 保持连接：on_worker_destroyed 靠它把对象从
+        active_workers 移除，断开会导致被取消的 worker 永久泄漏。
+        """
+        worker.is_cancelled = True
+        try:
+            worker.signals.started.disconnect()
+            worker.signals.progress.disconnect()
+            worker.signals.preview_loaded.disconnect()
+            worker.signals.finished.disconnect()
+        except Exception:
+            pass
+
     def start_worker(self, worker):
         fp = worker.file_path
         if fp in self.running_scrape_workers:
             old_worker = self.running_scrape_workers[fp]
-            old_worker.is_cancelled = True
-            try:
-                old_worker.signals.started.disconnect()
-                old_worker.signals.progress.disconnect()
-                old_worker.signals.preview_loaded.disconnect()
-                old_worker.signals.finished.disconnect()
-                old_worker.signals.finished_worker.disconnect()
-            except Exception:
-                pass
+            self._detach_worker(old_worker)
             self.running_scrape_workers.pop(fp, None)
 
         worker.setAutoDelete(False)
@@ -551,15 +618,7 @@ class Controller:
     def clear_all_tasks(self):
         # 立即取消所有运行中的 worker 并断开信号连接
         for fp, worker in list(self.running_scrape_workers.items()):
-            worker.is_cancelled = True
-            try:
-                worker.signals.started.disconnect()
-                worker.signals.progress.disconnect()
-                worker.signals.preview_loaded.disconnect()
-                worker.signals.finished.disconnect()
-                worker.signals.finished_worker.disconnect()
-            except Exception:
-                pass
+            self._detach_worker(worker)
         self.running_scrape_workers.clear()
 
         self.view.table.setRowCount(0)
@@ -590,16 +649,7 @@ class Controller:
             
             if target_fp:
                 if target_fp in self.running_scrape_workers:
-                    worker = self.running_scrape_workers[target_fp]
-                    worker.is_cancelled = True
-                    try:
-                        worker.signals.started.disconnect()
-                        worker.signals.progress.disconnect()
-                        worker.signals.preview_loaded.disconnect()
-                        worker.signals.finished.disconnect()
-                        worker.signals.finished_worker.disconnect()
-                    except Exception:
-                        pass
+                    self._detach_worker(self.running_scrape_workers[target_fp])
                     self.running_scrape_workers.pop(target_fp, None)
 
                 if target_fp in self.task_files:
@@ -1120,6 +1170,15 @@ class Controller:
                 break
 
         if all_done and self.processed_parent_dirs:
+            # 延迟到事件循环下一拍再弹框：on_worker_finished 内直接 exec 模态框
+            # 会开局部事件循环，期间其他 worker 的 finished 信号导致本函数重入、双弹框
+            QTimer.singleShot(0, self._prompt_cleanup_empty_dirs)
+
+    def _prompt_cleanup_empty_dirs(self):
+        if self._cleanup_prompt_showing or not self.processed_parent_dirs:
+            return
+        self._cleanup_prompt_showing = True
+        try:
             empty_dirs = clean_empty_parent_dirs(self.processed_parent_dirs)
             if empty_dirs:
                 dir_list_str = "\n".join(empty_dirs)
@@ -1136,6 +1195,8 @@ class Controller:
                         remove_empty_dir(pdir)
             self.processed_parent_dirs.clear()
             self.save_backup()
+        finally:
+            self._cleanup_prompt_showing = False
 
     def handle_selection_changed(self):
         selected_ranges = self.view.table.selectedRanges()
@@ -1301,7 +1362,7 @@ class Controller:
                 pixmap = QPixmap(local_poster_path)
                 if not pixmap.isNull():
                     scaled_pixmap = pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                    self.pixmap_cache[cache_key] = scaled_pixmap
+                    self._cache_pixmap(cache_key, scaled_pixmap)
                     self.view.lbl_cover.setPixmap(scaled_pixmap)
                     poster_loaded = True
 
@@ -1314,14 +1375,7 @@ class Controller:
                     poster_loaded = True
                 else:
                     self.view.lbl_cover.setText("正在加载海报...")
-                    proxies = self.get_active_proxies()
-                    
-                    worker = ImageLoadWorker(filepath, cover_url, proxies, self.image_session, is_poster=True)
-                    worker.signals.loaded.connect(self.on_network_image_loaded)
-                    worker.signals.finished_worker.connect(self.on_worker_destroyed)
-
-                    self.active_workers.add(worker)
-                    self.thread_pool.start(worker)
+                    self._start_image_worker(filepath, cover_url, is_poster=True)
                     poster_loaded = True
             
             if not poster_loaded:
@@ -1358,7 +1412,7 @@ class Controller:
                             pix = QPixmap(full_img_path)
                             if not pix.isNull():
                                 scaled_pix = pix.scaledToHeight(90, Qt.TransformationMode.SmoothTransformation)
-                                self.pixmap_cache[cache_key] = scaled_pix
+                                self._cache_pixmap(cache_key, scaled_pix)
                                 lbl.setPixmap(scaled_pix)
                                 lbl.pixmap_data = pix
                         
@@ -1367,7 +1421,6 @@ class Controller:
         else:
             thumbnails = detail.get("thumbnail_images", [])
             if thumbnails:
-                proxies = self.get_active_proxies()
                 urls_to_load = thumbnails[1:] if len(thumbnails) > 1 else thumbnails
                 for url in urls_to_load:
                     cache_key = (url, 90)
@@ -1385,14 +1438,10 @@ class Controller:
                         lbl.clicked.connect(self.show_zoomed_image)
                         self.view.samples_layout.addWidget(lbl)
                     else:
-                        worker = ImageLoadWorker(filepath, url, proxies, self.image_session, is_poster=False)
-                        worker.signals.loaded.connect(self.on_network_image_loaded)
-                        worker.signals.finished_worker.connect(self.on_worker_destroyed)
-
-                        self.active_workers.add(worker)
-                        self.thread_pool.start(worker)
+                        self._start_image_worker(filepath, url, is_poster=False)
 
     def on_network_image_loaded(self, filepath, url, data, is_poster):
+        self._pending_image_urls.discard((filepath, url))
         if self.current_preview_filepath == filepath:
             pix = QPixmap()
             pix.loadFromData(data)
@@ -1400,17 +1449,21 @@ class Controller:
                 if is_poster:
                     w, h = self.view.lbl_cover.width(), self.view.lbl_cover.height()
                     scaled_pix = pix.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                    self.pixmap_cache[(url, w, h)] = scaled_pix
+                    self._cache_pixmap((url, w, h), scaled_pix)
                     self.view.lbl_cover.setPixmap(scaled_pix)
                 else:
                     h_target = 90
                     cache_key = (url, h_target)
                     raw_key = (url, "raw")
-                    
-                    self.pixmap_cache[raw_key] = pix
+
+                    # 缓存里已有说明该 URL 的剧照标签已渲染过（并发 worker / 切回视图），避免重复添加
+                    if cache_key in self.pixmap_cache:
+                        return
+
+                    self._cache_pixmap(raw_key, pix)
                     scaled_pix = pix.scaledToHeight(h_target, Qt.TransformationMode.SmoothTransformation)
-                    self.pixmap_cache[cache_key] = scaled_pix
-                    
+                    self._cache_pixmap(cache_key, scaled_pix)
+
                     lbl = ClickableLabel()
                     lbl.setCursor(Qt.CursorShape.PointingHandCursor)
                     lbl.setPixmap(scaled_pix)
@@ -1454,7 +1507,7 @@ class Controller:
             return 0.0
         import re
         s = size_str.upper().strip()
-        match = re.match(r'^([\d\.]+)\s*(GB|MB|KB|B|G|M|K)?', s)
+        match = re.match(r'^(\d+(?:\.\d+)?)\s*(GB|MB|KB|B|G|M|K)?', s)
         if not match:
             return 0.0
         num = float(match.group(1))
@@ -1538,7 +1591,10 @@ class Controller:
             print(f"自动保存 Cookie 失败: {e}")
 
     def retry_failed_tasks(self):
-        failed_count = 0
+        # 按失败阶段分别重试：有 detail 说明刮削已成功、失败发生在整理阶段。
+        # 只重试失败项本身，不把列表里其他等待中的任务一并带上。
+        scrape_fps = []
+        organize_fps = []
         for fp, info in self.task_files.items():
             status = info.get("status", "")
             if "失败" in status or "异常" in status or status.startswith("❌"):
@@ -1547,14 +1603,17 @@ class Controller:
                 status_item = self.view.table.item(row, 3)
                 if status_item:
                     status_item.setText("等待中")
-                failed_count += 1
-                
-        if failed_count == 0:
+                (organize_fps if info.get("detail") else scrape_fps).append(fp)
+
+        if not scrape_fps and not organize_fps:
             QMessageBox.information(self.view, "提示", "列表中没有失败的任务需要重试")
             return
-            
+
         self.save_backup()
-        self.start_scraping()
+        if scrape_fps:
+            self.scrape_multiple_tasks(scrape_fps)
+        if organize_fps:
+            self.organize_multiple_tasks(organize_fps)
         self.apply_task_filter()
 
     def copy_to_clipboard(self, text):

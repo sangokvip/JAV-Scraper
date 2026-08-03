@@ -169,13 +169,12 @@ class JavdbLogin:
         try:
             url = f"{self.base_url}/tags"
             response = self.session.get(url, timeout=config.JAVDB['timeout'])
-            
-            if '/login' in response.text or '登入' in response.text:
-                return False
-            
+
+            # 不能用「页面含 /login 字符串」判未登录——导航/页脚正常页面也有该链接，
+            # 会导致每次都重走密码登录并触发验证码。以正向信号（用户菜单）为准。
             soup = BeautifulSoup(response.text, 'lxml')
             user_menu = soup.select_one('.user-menu, .dropdown-toggle')
-            
+
             return user_menu is not None
             
         except Exception as e:

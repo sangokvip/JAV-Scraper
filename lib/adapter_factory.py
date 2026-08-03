@@ -23,32 +23,41 @@ class AdapterFactory:
     }
     
     _instances: Dict[Platform, BaseAdapter] = {}
-    
+    _instance_params: Dict[Platform, str] = {}
+
     @classmethod
     def get_adapter(cls, platform: Platform, existing_tags: list = None, **kwargs) -> BaseAdapter:
         """
         获取指定平台的适配器
-        
+
         Args:
             platform: 平台类型
             existing_tags: 已有的标签列表
             **kwargs: 其他参数
-            
+
         Returns:
             适配器实例
         """
-        # 检查是否已有实例
-        if platform in cls._instances:
+        # 缓存键纳入构造参数指纹：用户改代理/域名后必须重建实例，
+        # 否则命中旧缓存时新参数被静默丢弃
+        try:
+            params_key = json.dumps({'existing_tags_len': len(existing_tags or []), **kwargs},
+                                    sort_keys=True, default=str)
+        except TypeError:
+            params_key = str(kwargs)
+
+        if platform in cls._instances and cls._instance_params.get(platform) == params_key:
             return cls._instances[platform]
-        
+
         adapter_class = cls._adapters.get(platform)
         if not adapter_class:
             raise ValueError(f"不支持的平台: {platform}")
-        
-        # 创建新实例
+
+        # 创建新实例（参数变化时覆盖旧实例）
         adapter = adapter_class(existing_tags=existing_tags, **kwargs)
         cls._instances[platform] = adapter
-        
+        cls._instance_params[platform] = params_key
+
         return adapter
     
     @classmethod
@@ -96,8 +105,10 @@ class AdapterFactory:
         """
         if platform is None:
             cls._instances.clear()
+            cls._instance_params.clear()
         elif platform in cls._instances:
             del cls._instances[platform]
+            cls._instance_params.pop(platform, None)
     
     @classmethod
     def get_supported_platforms(cls) -> list:

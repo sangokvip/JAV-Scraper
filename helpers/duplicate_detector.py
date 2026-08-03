@@ -1,7 +1,8 @@
 import os
 import re
+from typing import Optional
 
-def find_existing_organized_folder(output_dir: str, code: str) -> str or None:
+def find_existing_organized_folder(output_dir: str, code: str) -> Optional[str]:
     """
     检索目标归档目录下是否已存在对应番号的归档文件夹。
     采用两级遍历（第一级：主演文件夹/未知演员；第二级：具体番号归档文件夹）。

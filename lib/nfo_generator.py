@@ -34,9 +34,14 @@ def generate_nfo(data: dict, output_path: str):
     # 简介
     ET.SubElement(root, "plot").text = data.get("plot", "")
     
-    # 默认海报/背景图
+    # 海报/背景图：顶层 <poster>/<fanart> 兼容部分刮削器，
+    # <art> 包裹的写法才是 Kodi movie.nfo 标准，两者都写
     ET.SubElement(root, "poster").text = "poster.jpg"
-    ET.SubElement(root, "fanart").text = "fanart.jpg"
+    fanart_el = ET.SubElement(root, "fanart")
+    ET.SubElement(fanart_el, "thumb").text = "fanart.jpg"
+    art_el = ET.SubElement(root, "art")
+    ET.SubElement(art_el, "poster").text = "poster.jpg"
+    ET.SubElement(art_el, "fanart").text = "fanart.jpg"
     
     # 美化 XML 输出
     raw_xml = ET.tostring(root, encoding="utf-8")

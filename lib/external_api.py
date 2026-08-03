@@ -60,6 +60,23 @@ CONFIG_FILE_BUNDLE = BUNDLE_DIR / "third_party_config.json"
 DEFAULT_PLATFORM = Platform.JAVDB
 
 
+
+def _page_window(start: int, end: int, page_size: int = 40):
+    """
+    把 [start, end) 的条目区间换算为 (起始页, 页数, 切片偏移)。
+    注意：假设每页恰好 page_size 条；被屏蔽条目或末页不满时会有偏差。
+    start/end 非法时返回 None。
+    """
+    if start < 0 or end <= start:
+        return None
+    start_page = start // page_size + 1
+    end_page = (end - 1) // page_size + 1
+    max_pages = end_page - start_page + 1
+    start_offset = start % page_size
+    end_offset = start_offset + (end - start)
+    return start_page, max_pages, start_offset, end_offset
+
+
 def load_config() -> Dict[str, Any]:
     """加载配置文件"""
     config_file = CONFIG_FILE_USER if CONFIG_FILE_USER.exists() else CONFIG_FILE_BUNDLE
@@ -135,19 +152,14 @@ def search_actor_works(actor_id: str, start: int = 0, end: int = 20,
     """
     adapter = get_adapter(platform)
     
-    # 计算需要的页数（假设每页约40个作品）
-    page_size = 40
-    start_page = start // page_size + 1
-    end_page = (end - 1) // page_size + 1
-    max_pages = end_page - start_page + 1
+    window = _page_window(start, end)
+    if window is None:
+        return []
+    start_page, max_pages, start_offset, end_offset = window
     
     # 获取作品
     result = adapter.get_actor_works(actor_id, page=start_page, max_pages=max_pages)
     works = result.get('works', [])
-    
-    # 计算在返回结果中的切片位置
-    start_offset = start % page_size
-    end_offset = start_offset + (end - start)
     
     return works[start_offset:end_offset]
 
@@ -311,19 +323,14 @@ def search_videos_by_tags(tag_names: List[str], start: int = 0, end: int = 20,
     if not tag_params:
         return []
     
-    # 计算需要的页数（假设每页约40个作品）
-    page_size = 40
-    start_page = start // page_size + 1
-    end_page = (end - 1) // page_size + 1
-    max_pages = end_page - start_page + 1
+    window = _page_window(start, end)
+    if window is None:
+        return []
+    start_page, max_pages, start_offset, end_offset = window
     
     # 执行搜索
     result = adapter.search_by_tags(page=start_page, max_pages=max_pages, **tag_params)
     works = result.get('works', [])
-    
-    # 计算在返回结果中的切片位置
-    start_offset = start % page_size
-    end_offset = start_offset + (end - start)
     
     return works[start_offset:end_offset]
 
@@ -388,11 +395,10 @@ def get_list_works(list_id: str, start: int = 0, end: int = 20) -> List[Dict[str
     # 此功能仅支持 JAVDB
     api = JavdbAPI()
     
-    # 计算需要的页数（假设每页约40个作品）
-    page_size = 40
-    start_page = start // page_size + 1
-    end_page = (end - 1) // page_size + 1
-    max_pages = end_page - start_page + 1
+    window = _page_window(start, end)
+    if window is None:
+        return []
+    start_page, max_pages, start_offset, end_offset = window
     
     # 获取清单作品
     all_works = []
@@ -408,10 +414,6 @@ def get_list_works(list_id: str, start: int = 0, end: int = 20) -> List[Dict[str
         
         current_page += 1
         time.sleep(0.5)
-    
-    # 计算在返回结果中的切片位置
-    start_offset = start % page_size
-    end_offset = start_offset + (end - start)
     
     return all_works[start_offset:end_offset]
 

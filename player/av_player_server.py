@@ -231,9 +231,7 @@ def extract_from_jable(avid: str, domain: str = 'jable.tv'):
 
 @app.route('/')
 def index():
-    index_path = os.path.join(SCRIPT_DIR, 'index.html')
-    with open(index_path, 'r', encoding='utf-8') as f:
-        return f.read()
+    return send_from_directory(SCRIPT_DIR, 'index.html')
 
 
 @app.route('/api/extract/<avid>')

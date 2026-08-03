@@ -335,23 +335,25 @@ class AutoLogin:
         self.server = None
         self.server_thread = None
     
-    def start_server(self):
-        """启动本地服务器"""
-        try:
-            self.server = HTTPServer(('localhost', self.port), CookieReceiverHandler)
-            self.server_thread = threading.Thread(target=self.server.serve_forever)
-            self.server_thread.daemon = True
-            self.server_thread.start()
-            print(f"✅ 本地服务器已启动: http://localhost:{self.port}")
-            return True
-        except OSError as e:
-            if e.errno == 48:  # Address already in use
-                print(f"⚠️  端口 {self.port} 已被占用，尝试使用其他端口...")
-                self.port += 1
-                return self.start_server()
-            else:
-                print(f"❌ 启动服务器失败: {e}")
-                return False
+    def start_server(self, max_retries: int = 20):
+        """启动本地服务器（端口被占用时顺延重试，最多 max_retries 次）"""
+        for _ in range(max_retries):
+            try:
+                self.server = HTTPServer(('localhost', self.port), CookieReceiverHandler)
+                self.server_thread = threading.Thread(target=self.server.serve_forever)
+                self.server_thread.daemon = True
+                self.server_thread.start()
+                print(f"✅ 本地服务器已启动: http://localhost:{self.port}")
+                return True
+            except OSError as e:
+                if e.errno == 48:  # Address already in use
+                    print(f"⚠️  端口 {self.port} 已被占用，尝试使用其他端口...")
+                    self.port += 1
+                else:
+                    print(f"❌ 启动服务器失败: {e}")
+                    return False
+        print(f"❌ 连续 {max_retries} 个端口均被占用，放弃启动")
+        return False
     
     def stop_server(self):
         """停止服务器"""

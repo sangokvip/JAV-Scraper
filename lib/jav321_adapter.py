@@ -52,14 +52,19 @@ class Jav321Adapter(BaseAdapter):
                 r = requests.get(url, headers=self.headers, proxies=self.proxies, timeout=timeout, allow_redirects=True)
                 if r.status_code == 200:
                     return r
+                # 服务端明确返回了 HTTP 错误（404/403 等）——不是网络问题，
+                # 直连重发只会对目标站造成双倍请求，直接放弃
+                print(f"[JAV321 GET] 代理请求返回 HTTP {r.status_code}: {url}")
+                return None
             except Exception as e:
                 print(f"[JAV321 GET] 代理请求异常: {e}，正在尝试无代理直连...")
-        
-        # 2. 尝试无代理直连
+
+        # 2. 尝试无代理直连（无代理配置，或代理网络异常时）
         try:
             r = requests.get(url, headers=self.headers, timeout=timeout, allow_redirects=True)
             if r.status_code == 200:
                 return r
+            print(f"[JAV321 GET] 直连请求返回 HTTP {r.status_code}: {url}")
         except Exception as e:
             print(f"[JAV321 GET] 直连请求异常: {e}")
         return None
@@ -72,6 +77,8 @@ class Jav321Adapter(BaseAdapter):
                 r = requests.post(url, headers=self.headers, data=data, proxies=self.proxies, timeout=timeout, allow_redirects=True)
                 if r.status_code == 200:
                     return r
+                print(f"[JAV321 POST] 代理请求返回 HTTP {r.status_code}: {url}")
+                return None
             except Exception as e:
                 print(f"[JAV321 POST] 代理请求异常: {e}，正在尝试无代理直连...")
         

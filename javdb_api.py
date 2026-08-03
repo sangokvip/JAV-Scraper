@@ -42,6 +42,7 @@ JAVDB API 核心模块
 
 import re
 import json
+import threading
 import time
 from typing import List, Dict, Optional, Any
 from urllib.parse import urljoin, quote, urlparse, parse_qs
@@ -88,7 +89,9 @@ class JavdbAPI:
         self.session.headers.update(config.HEADERS)
         
         self._load_cookies()
-        
+
+        # GUI 多线程共用实例时计数需加锁
+        self._stats_lock = threading.Lock()
         self.request_count = 0
         self.success_count = 0
         
@@ -260,7 +263,8 @@ class JavdbAPI:
         attempt = 0
         while attempt < max_attempts:
             try:
-                self.request_count += 1
+                with self._stats_lock:
+                    self.request_count += 1
 
                 if method.lower() == 'get':
                     response = self.session.get(url, **kwargs)
@@ -268,7 +272,8 @@ class JavdbAPI:
                     response = self.session.post(url, **kwargs)
 
                 if response.status_code == 200:
-                    self.success_count += 1
+                    with self._stats_lock:
+                        self.success_count += 1
                     return response
 
                 last_status = response.status_code
@@ -681,6 +686,48 @@ class JavdbAPI:
     
     # ==================== 演员作品（分页） ====================
     
+    def _fetch_work_list(self, url: str, page: int) -> Dict:
+        """
+        抓取一个作品列表页并解析为标准结构。
+        演员页 / Tag 页 / 搜索页的列表结构一致，统一走这里。
+        """
+        response = self.get(url)
+        soup = BeautifulSoup(response.text, 'lxml')
+
+        works = []
+        for item in soup.select('div.item a'):
+            try:
+                work = self._parse_work_item(item)
+                if work:
+                    works.append(work)
+            except Exception:
+                continue
+
+        has_next = soup.select_one('nav.pagination a[rel="next"]') is not None
+        return {
+            'page': page,
+            'has_next': has_next,
+            'works': works,
+        }
+
+    def _fetch_full_details(self, works: List[Dict], download_images: bool = False) -> List[Dict]:
+        """
+        逐条补全作品详情。失败的条目保留基础信息并打上 detail_error 标记，
+        调用方可据此判断数据是否完整。最后一条之后不再 sleep。
+        """
+        full_works = []
+        for i, work in enumerate(works):
+            try:
+                detail = self.get_video_detail(work['video_id'], download_images)
+                full_works.append(DataProcessor.merge_video_detail(work, detail))
+            except Exception as e:
+                degraded = dict(work)
+                degraded['detail_error'] = str(e)
+                full_works.append(degraded)
+            if i < len(works) - 1:
+                time.sleep(config.JAVDB['sleep_time'])
+        return full_works
+
     def get_actor_works_by_page(self, actor_id: str, page: int = 1) -> Dict:
         """
         获取演员作品的code等基础信息（单页）
@@ -710,29 +757,8 @@ class JavdbAPI:
             url = f"/actors/{actor_id}"
         else:
             url = f"/actors/{actor_id}?page={page}"
-        
-        response = self.get(url)
-        soup = BeautifulSoup(response.text, 'lxml')
-        
-        works = []
-        items = soup.select('div.item a')
-        
-        for item in items:
-            try:
-                work = self._parse_work_item(item)
-                if work:
-                    works.append(work)
-            except Exception:
-                continue
-        
-        next_btn = soup.select_one('nav.pagination a[rel="next"]')
-        has_next = next_btn is not None
-        
-        return {
-            'page': page,
-            'has_next': has_next,
-            'works': works,
-        }
+
+        return self._fetch_work_list(url, page)
     
     def get_actor_works_full_by_page(self, actor_id: str, page: int = 1, 
                                       download_images: bool = False) -> Dict:
@@ -764,18 +790,7 @@ class JavdbAPI:
             }
         """
         result = self.get_actor_works_by_page(actor_id, page)
-        
-        full_works = []
-        for work in result['works']:
-            try:
-                detail = self.get_video_detail(work['video_id'], download_images)
-                full_work = DataProcessor.merge_video_detail(work, detail)
-                full_works.append(full_work)
-            except Exception:
-                full_works.append(work)
-            time.sleep(config.JAVDB['sleep_time'])
-        
-        result['works'] = full_works
+        result['works'] = self._fetch_full_details(result['works'], download_images)
         return result
     
     def get_actor_works(self, actor_id: str, max_pages: int = 10, 
@@ -1017,29 +1032,8 @@ class JavdbAPI:
             url = f"/tags?c1={tag_id}"
         else:
             url = f"/tags?c1={tag_id}&page={page}"
-        
-        response = self.get(url)
-        soup = BeautifulSoup(response.text, 'lxml')
-        
-        works = []
-        items = soup.select('div.item a')
-        
-        for item in items:
-            try:
-                work = self._parse_work_item(item)
-                if work:
-                    works.append(work)
-            except Exception:
-                continue
-        
-        next_btn = soup.select_one('nav.pagination a[rel="next"]')
-        has_next = next_btn is not None
-        
-        return {
-            'page': page,
-            'has_next': has_next,
-            'works': works,
-        }
+
+        return self._fetch_work_list(url, page)
     
     def get_tag_works_full_by_page(self, tag_id: str, page: int = 1,
                                     download_images: bool = False) -> Dict:
@@ -1071,18 +1065,7 @@ class JavdbAPI:
             }
         """
         result = self.get_tag_works_by_page(tag_id, page)
-        
-        full_works = []
-        for work in result['works']:
-            try:
-                detail = self.get_video_detail(work['video_id'], download_images)
-                full_work = DataProcessor.merge_video_detail(work, detail)
-                full_works.append(full_work)
-            except Exception:
-                full_works.append(work)
-            time.sleep(config.JAVDB['sleep_time'])
-        
-        result['works'] = full_works
+        result['works'] = self._fetch_full_details(result['works'], download_images)
         return result
     
     def get_tag_works(self, tag_id: str, max_pages: int = 10, 
@@ -1187,30 +1170,10 @@ class JavdbAPI:
             url = f"/tags?{query_string}"
         else:
             url = f"/tags?{query_string}&page={page}"
-        
-        response = self.get(url)
-        soup = BeautifulSoup(response.text, 'lxml')
-        
-        works = []
-        items = soup.select('div.item a')
-        
-        for item in items:
-            try:
-                work = self._parse_work_item(item)
-                if work:
-                    works.append(work)
-            except Exception:
-                continue
-        
-        next_btn = soup.select_one('nav.pagination a[rel="next"]')
-        has_next = next_btn is not None
-        
-        return {
-            'page': page,
-            'has_next': has_next,
-            'tag_params': resolved_params,
-            'works': works,
-        }
+
+        result = self._fetch_work_list(url, page)
+        result['tag_params'] = resolved_params
+        return result
     
     def search_by_tags_full(self, page: int = 1, download_images: bool = False, 
                             **tag_params) -> Dict:
@@ -1255,18 +1218,7 @@ class JavdbAPI:
             result = api.search_by_tags_full(page=1, tag_主題="美少女", tag_服裝="水手服")
         """
         result = self.search_by_tags(page, **tag_params)
-        
-        full_works = []
-        for work in result['works']:
-            try:
-                detail = self.get_video_detail(work['video_id'], download_images)
-                full_work = DataProcessor.merge_video_detail(work, detail)
-                full_works.append(full_work)
-            except Exception:
-                full_works.append(work)
-            time.sleep(config.JAVDB['sleep_time'])
-        
-        result['works'] = full_works
+        result['works'] = self._fetch_full_details(result['works'], download_images)
         return result
     
     # ==================== 搜索功能 ====================
@@ -1724,6 +1676,19 @@ class JavdbAPI:
 
 # ==================== 便捷函数 ====================
 
+_default_api_instance = None
+
+
+def _default_api() -> 'JavdbAPI':
+    """
+    模块级共享实例：便捷函数每次 new 一个 JavdbAPI 会重复建 session、
+    读 cookie、建输出目录，改为惰性单例。
+    """
+    global _default_api_instance
+    if _default_api_instance is None:
+        _default_api_instance = JavdbAPI()
+    return _default_api_instance
+
 def get_video_detail(video_id: str, download_images: bool = False) -> Dict:
     """
     抓取作品页全量信息
@@ -1735,7 +1700,7 @@ def get_video_detail(video_id: str, download_images: bool = False) -> Dict:
     Returns:
         视频详情字典
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_video_detail(video_id, download_images)
 
 
@@ -1750,7 +1715,7 @@ def get_video_by_code(code: str, download_images: bool = False) -> Optional[Dict
     Returns:
         视频详情字典，未找到返回 None
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_video_by_code(code, download_images)
 
 
@@ -1764,7 +1729,7 @@ def search_actor(actor_name: str) -> List[Dict]:
     Returns:
         演员列表
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.search_actor(actor_name)
 
 
@@ -1779,7 +1744,7 @@ def get_actor_works_by_page(actor_id: str, page: int = 1) -> Dict:
     Returns:
         包含 page, has_next, works 的字典
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_actor_works_by_page(actor_id, page)
 
 
@@ -1796,7 +1761,7 @@ def get_actor_works_full_by_page(actor_id: str, page: int = 1,
     Returns:
         包含 page, has_next, works 的字典
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_actor_works_full_by_page(actor_id, page, download_images)
 
 
@@ -1814,7 +1779,7 @@ def get_actor_works(actor_name: str, max_pages: int = 10,
     Returns:
         作品列表
     """
-    api = JavdbAPI()
+    api = _default_api()
     
     actors = api.search_actor(actor_name)
     if not actors:
@@ -1839,7 +1804,7 @@ def get_tag_works_by_page(tag_id: str, page: int = 1) -> Dict:
     Returns:
         包含 page, has_next, works 的字典
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_tag_works_by_page(tag_id, page)
 
 
@@ -1856,7 +1821,7 @@ def get_tag_works_full_by_page(tag_id: str, page: int = 1,
     Returns:
         包含 page, has_next, works 的字典
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_tag_works_full_by_page(tag_id, page, download_images)
 
 
@@ -1874,7 +1839,7 @@ def get_tag_works(tag_id: str, max_pages: int = 10,
     Returns:
         作品列表
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_tag_works(tag_id, max_pages, get_details, download_images)
 
 
@@ -1891,7 +1856,7 @@ def scrape_actor_full(actor_name: str, max_pages: int = 10,
     Returns:
         完整数据字典
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.save_actor_works(actor_name, max_pages, download_images)
 
 
@@ -1924,7 +1889,7 @@ def search_by_tags(page: int = 1, **tag_params) -> Dict:
         result = search_by_tags(page=1, tag_主題="淫亂真實")
         result = search_by_tags(page=1, tag_主題="美少女", tag_服裝="水手服")
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.search_by_tags(page, **tag_params)
 
 
@@ -1959,7 +1924,7 @@ def search_by_tags_full(page: int = 1, download_images: bool = False,
         result = search_by_tags_full(page=1, tag_主題="淫亂真實")
         result = search_by_tags_full(page=1, tag_主題="美少女", tag_服裝="水手服")
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.search_by_tags_full(page, download_images, **tag_params)
 
 
@@ -1979,7 +1944,7 @@ def get_want_watch_videos(page: int = 1) -> Dict:
             'works': [...]
         }
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_want_watch_videos(page)
 
 
@@ -1997,7 +1962,7 @@ def get_watched_videos(page: int = 1) -> Dict:
             'works': [...]
         }
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_watched_videos(page)
 
 
@@ -2023,7 +1988,7 @@ def get_user_lists(page: int = 1) -> Dict:
             ]
         }
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_user_lists(page)
 
 
@@ -2045,7 +2010,7 @@ def get_user_lists_all(max_pages: int = 100) -> List[Dict]:
             ...
         ]
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_user_lists_all(max_pages)
 
 
@@ -2066,7 +2031,7 @@ def get_list_detail(list_id: str, page: int = 1) -> Dict:
             'works': [...]
         }
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_list_detail(list_id, page)
 
 
@@ -2080,7 +2045,7 @@ def get_want_watch_videos_all(max_pages: int = 100) -> List[Dict]:
     Returns:
         作品列表
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_want_watch_videos_all(max_pages)
 
 
@@ -2094,7 +2059,7 @@ def get_watched_videos_all(max_pages: int = 100) -> List[Dict]:
     Returns:
         作品列表
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_watched_videos_all(max_pages)
 
 
@@ -2113,19 +2078,24 @@ def get_list_detail_all(list_id: str, max_pages: int = 100) -> Dict:
             'works': [...]
         }
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.get_list_detail_all(list_id, max_pages)
 
 
 # ==================== 标签管理模块导出 ====================
-from lib.tag_manager import (
-    TagManager,
-    get_tag_manager,
-    get_tag_by_name,
-    get_tag_by_id,
-    search_tags_by_keyword,
-    convert_to_traditional,
-)
+# 包 try/except：tag_manager 缺失（如打包漏文件）时不应拖垮整个 javdb_api，
+# 否则上面特意做的 lazy tag_manager property 形同虚设
+try:
+    from lib.tag_manager import (
+        TagManager,
+        get_tag_manager,
+        get_tag_by_name,
+        get_tag_by_id,
+        search_tags_by_keyword,
+        convert_to_traditional,
+    )
+except Exception as _tag_import_err:
+    print(f"⚠ tag_manager 模块不可用，标签功能禁用: {_tag_import_err}")
 
 
 # ==================== 图片下载模块 ====================
@@ -2161,7 +2131,7 @@ def download_video_images(video_id: str, image_urls: List[Dict[str, str]],
             'files': [下载的文件路径列表]
         }
     """
-    api = JavdbAPI()
+    api = _default_api()
     return api.image_downloader.download_images(
         video_id, image_urls, output_dir, headers
     )
@@ -2183,7 +2153,7 @@ def download_video_detail_images(video_id: str, output_dir: str = "output/images
             'download_result': 下载结果统计
         }
     """
-    api = JavdbAPI()
+    api = _default_api()
     detail = api.get_video_detail(video_id)
     
     download_result = None

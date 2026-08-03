@@ -29,6 +29,11 @@ from helpers.subtitle_helper import find_matching_subtitles
 from helpers.duplicate_detector import find_existing_organized_folder
 from helpers.player_helper import play_video, open_local_folder
 from helpers.template_helper import format_target_path
+
+# 支持的视频扩展名（导入过滤与目标目录扫描共用）
+VIDEO_EXTENSIONS = ('.mp4', '.mkv', '.avi', '.wmv', '.mov', '.flv', '.rmvb')
+
+
 class ProxyTestWorkerSignals(QObject):
     finished = Signal(bool, str)
 
@@ -226,7 +231,7 @@ class Controller:
         self.apply_task_filter()
 
     def handle_files_dropped(self, paths: list):
-        valid_extensions = ('.mp4', '.mkv', '.avi', '.wmv', '.mov', '.flv', '.rmvb')
+        valid_extensions = VIDEO_EXTENSIONS
         all_files = []
         
         for path in paths:
@@ -454,18 +459,15 @@ class Controller:
     def handle_cell_changed(self, item):
         if item.column() == 2:
             row = item.row()
-            target_fp = None
             new_code = None
-            for fp, info in self.task_files.items():
-                if info["row"] == row:
-                    new_code = item.text().strip().upper()
-                    self.view.table.blockSignals(True)
-                    item.setText(new_code)
-                    self.view.table.blockSignals(False)
-                    info["code"] = new_code
-                    target_fp = fp
-                    break
-            
+            target_fp = self._fp_by_row(row)
+            if target_fp:
+                new_code = item.text().strip().upper()
+                self.view.table.blockSignals(True)
+                item.setText(new_code)
+                self.view.table.blockSignals(False)
+                self.task_files[target_fp]["code"] = new_code
+
             if target_fp and new_code:
                 info = self.task_files[target_fp]
                 output_dir = self.view.path_input.text().strip()
@@ -494,11 +496,7 @@ class Controller:
     def handle_cell_double_clicked(self, row, column):
         # 排除“识别番号”编辑列。其他列双击则调用视频播放
         if column != 2:
-            filepath = None
-            for fp, info in self.task_files.items():
-                if info["row"] == row:
-                    filepath = fp
-                    break
+            filepath = self._fp_by_row(row)
             if filepath:
                 self.play_task_video(filepath)
 
@@ -583,6 +581,13 @@ class Controller:
             return {"http": proxy, "https": proxy} if proxy else None
         return None
 
+    def _fp_by_row(self, row):
+        """按表格行号反查任务 filepath，找不到返回 None"""
+        for fp, info in self.task_files.items():
+            if info["row"] == row:
+                return fp
+        return None
+
     def _detach_worker(self, worker):
         """
         取消 worker 并断开 UI 相关信号。
@@ -641,12 +646,8 @@ class Controller:
         sorted_rows = sorted(list(selected_rows), reverse=True)
         
         for row in sorted_rows:
-            target_fp = None
-            for fp, info in self.task_files.items():
-                if info["row"] == row:
-                    target_fp = fp
-                    break
-            
+            target_fp = self._fp_by_row(row)
+
             if target_fp:
                 if target_fp in self.running_scrape_workers:
                     self._detach_worker(self.running_scrape_workers[target_fp])
@@ -802,7 +803,7 @@ class Controller:
             return None
         
         # 寻找匹配的视频
-        valid_extensions = ('.mp4', '.mkv', '.avi', '.wmv', '.mov', '.flv', '.rmvb')
+        valid_extensions = VIDEO_EXTENSIONS
         try:
             for entry in os.listdir(target_folder):
                 if entry.lower().endswith(valid_extensions) and info["code"].upper() in entry.upper():
@@ -1207,13 +1208,8 @@ class Controller:
         row = self.view.table.currentRow()
         if row < 0:
             row = selected_ranges[0].topRow()
-        filepath = None
-        info = None
-        for fp, task_info in self.task_files.items():
-            if task_info["row"] == row:
-                filepath = fp
-                info = task_info
-                break
+        filepath = self._fp_by_row(row)
+        info = self.task_files.get(filepath) if filepath else None
 
         if not filepath or not info:
             self.reset_preview_panel()

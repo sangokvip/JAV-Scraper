@@ -57,13 +57,15 @@ def format_target_path(template: str, output_dir: str, code: str, detail: dict) 
         "date": date_clean
     }
     
+    # 单趟替换全部命中的变量：逐 key 替换会在替换第一个后直接返回，
+    # {code title} 这类组合占位符只换一半；单趟 alternation 也不会扫到已替换的值
+    keys_pattern = re.compile('|'.join(re.escape(k) for k in replacements), re.IGNORECASE)
+
     def replace_placeholder(match):
         inner = match.group(1)
-        for key, val in replacements.items():
-            pattern = re.compile(re.escape(key), re.IGNORECASE)
-            if pattern.search(inner):
-                return pattern.sub(val, inner)
-        return match.group(0)
+        if not keys_pattern.search(inner):
+            return match.group(0)
+        return keys_pattern.sub(lambda m: replacements[m.group(0).lower()], inner)
         
     path_rel = re.sub(r'\{([^{}]+)\}', replace_placeholder, template)
         

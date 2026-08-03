@@ -1,6 +1,7 @@
 import re
+from typing import Optional
 
-def extract_code(filename: str) -> str:
+def extract_code(filename: str) -> Optional[str]:
     if not filename:
         return None
     # 1. 预清洗：移除常见网址广告域名以及后面跟随的 @ 等连接符
@@ -9,8 +10,8 @@ def extract_code(filename: str) -> str:
     clean_name = re.sub(r'(?i)[-_](ch|c|uncensored|diy)\b', '', clean_name)
     clean_name = re.sub(r'(?<=\d)[cC]\b', '', clean_name)
     
-    # 2. 匹配 FC2 PPV
-    fc2_match = re.search(r'(?i)\bfc2[-_]?ppv[-_]?(\d{5,7})\b', clean_name)
+    # 2. 匹配 FC2（带或不带 PPV 段，如 FC2-PPV-1234567 / FC2-1234567）
+    fc2_match = re.search(r'(?i)\bfc2[-_]?(?:ppv[-_]?)?(\d{5,7})\b', clean_name)
     if fc2_match:
         return f"FC2-PPV-{fc2_match.group(1)}"
         

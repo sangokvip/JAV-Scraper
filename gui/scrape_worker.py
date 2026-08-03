@@ -336,7 +336,8 @@ class ScrapeWorker(QRunnable):
                     return
                 tb_str = traceback.format_exc()
                 try:
-                    log_path = os.path.expanduser("~/Desktop/jav_scraper_error.log")
+                    import config
+                    log_path = str(config.DATA_DIR / "jav_scraper_error.log")
                     with open(log_path, "a", encoding="utf-8") as log_f:
                         log_f.write(f"=== Error for {self.file_path} ===\n{tb_str}\n\n")
                 except Exception as log_err:

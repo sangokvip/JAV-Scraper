@@ -13,6 +13,12 @@ from curl_cffi import requests
 from bs4 import BeautifulSoup
 
 
+def _request_timeout() -> int:
+    """读取配置里的请求超时，避免散落的硬编码"""
+    import config
+    return config.JAVDB.get('timeout', 30)
+
+
 def sanitize_filename(name: str, fallback: str = 'unnamed') -> str:
     """
     清理来自网页抓取的文件/目录名：剥掉路径成分，替换非法字符。
@@ -92,7 +98,7 @@ class ImageDownloader:
 
         for i, url in enumerate(image_urls):
             try:
-                response = self.session.get(url, timeout=30)
+                response = self.session.get(url, timeout=_request_timeout())
                 if response.status_code == 200:
                     ext = url_ext(url)
                     file_path = video_dir / f"{i:03d}.{ext}"
@@ -153,7 +159,7 @@ class ImageDownloader:
             file_path = video_dir / filename
             
             try:
-                response = self.session.get(url, headers=request_headers, timeout=30)
+                response = self.session.get(url, headers=request_headers, timeout=_request_timeout())
                 if response.status_code == 200:
                     with open(file_path, 'wb') as f:
                         f.write(response.content)

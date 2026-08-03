@@ -15,10 +15,8 @@ if [ ! -f third_party_config.json ]; then
   echo '{"default_adapter": "javdb", "adapters": {"javdb": {"enabled": true, "domain_index": 0}}}' > third_party_config.json
 fi
 
-# 确保新安装的 pyinstaller 命令行工具在 PATH 中
-export PATH="/Users/mac/Library/Python/3.9/bin:$PATH"
-
 # 调用 pyinstaller 进行打包 (使用已定制 Info.plist 的 spec 配置文件以注入 macOS 隐私权限描述)
-pyinstaller --noconfirm "JAV_SCRAPER_mac.spec"
+# 用 python3 -m 方式调用，不依赖 pyinstaller 命令是否在 PATH 中
+python3 -m PyInstaller --noconfirm "JAV_SCRAPER_mac.spec"
 
 echo "macOS 打包成功，打包文件生成于 dist/ 目录。"

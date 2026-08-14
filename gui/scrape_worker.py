@@ -10,6 +10,9 @@ from lib import AdapterFactory
 from lib import detail_cache
 from helpers.subtitle_helper import find_matching_subtitles, move_and_rename_subtitles
 from helpers.template_helper import format_target_path
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 # 线程本地适配器缓存：QThreadPool 的每个工作线程复用自己的实例
 # （连接与 TLS 会话得以保持），线程之间互不共享（并发安全）。
@@ -131,7 +134,7 @@ class ScrapeWorker(QRunnable):
                                 detail_cache.put("javdb", self.code, detail)
                         except Exception as scrape_err:
                             last_error = scrape_err
-                            print(f"[JAVDB] 刮削过程中发生网络异常: {scrape_err}")
+                            log.error(f"[JAVDB] 刮削过程中发生网络异常: {scrape_err}")
 
                     # 若 JAVDB 刮削失败或返回空，降级回退至 JAV321 直连
                     if not detail:
@@ -147,7 +150,7 @@ class ScrapeWorker(QRunnable):
                                 self.signals.progress.emit(self.file_path, "成功从 JAV321 平台获取到刮削数据。")
                         except Exception as fallback_err:
                             last_error = fallback_err
-                            print(f"[JAV321] 降级刮削也失败: {fallback_err}")
+                            log.error(f"[JAV321] 降级刮削也失败: {fallback_err}")
 
                 if not detail:
                     # 区分"确实查不到"与"网络/代理异常"，否则用户无从排查
@@ -353,7 +356,7 @@ class ScrapeWorker(QRunnable):
                                     f.write(r.content)
                                 return True
                         except Exception as img_err:
-                            print(f"下载剧照失败 {img_url}: {img_err}")
+                            log.error(f"下载剧照失败 {img_url}: {img_err}")
                         return False
 
                     completed = 0
@@ -382,7 +385,7 @@ class ScrapeWorker(QRunnable):
                     with open(log_path, "a", encoding="utf-8") as log_f:
                         log_f.write(f"=== Error for {self.file_path} ===\n{tb_str}\n\n")
                 except Exception as log_err:
-                    print(f"写入 error.log 失败: {log_err}")
+                    log.error(f"写入 error.log 失败: {log_err}")
                 traceback.print_exc()
                 
                 err_msg = str(e)

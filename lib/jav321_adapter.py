@@ -16,6 +16,9 @@ from bs4 import BeautifulSoup
 from utils import url_ext
 from .base_adapter import BaseAdapter
 from .platform import Platform
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 def normalize_url(url: str, base_url: str = "https://www.jav321.com") -> str:
     if not url:
@@ -56,19 +59,19 @@ class Jav321Adapter(BaseAdapter):
                     return r
                 # 服务端明确返回了 HTTP 错误（404/403 等）——不是网络问题，
                 # 直连重发只会对目标站造成双倍请求，直接放弃
-                print(f"[JAV321 GET] 代理请求返回 HTTP {r.status_code}: {url}")
+                log.info(f"[JAV321 GET] 代理请求返回 HTTP {r.status_code}: {url}")
                 return None
             except Exception as e:
-                print(f"[JAV321 GET] 代理请求异常: {e}，正在尝试无代理直连...")
+                log.error(f"[JAV321 GET] 代理请求异常: {e}，正在尝试无代理直连...")
 
         # 2. 尝试无代理直连（无代理配置，或代理网络异常时）
         try:
             r = self.http.get(url, headers=self.headers, timeout=timeout, allow_redirects=True)
             if r.status_code == 200:
                 return r
-            print(f"[JAV321 GET] 直连请求返回 HTTP {r.status_code}: {url}")
+            log.info(f"[JAV321 GET] 直连请求返回 HTTP {r.status_code}: {url}")
         except Exception as e:
-            print(f"[JAV321 GET] 直连请求异常: {e}")
+            log.error(f"[JAV321 GET] 直连请求异常: {e}")
         return None
 
     def _request_post(self, url: str, data: dict, timeout: int = 6) -> Optional[requests.Response]:
@@ -79,10 +82,10 @@ class Jav321Adapter(BaseAdapter):
                 r = self.http.post(url, headers=self.headers, data=data, proxies=self.proxies, timeout=timeout, allow_redirects=True)
                 if r.status_code == 200:
                     return r
-                print(f"[JAV321 POST] 代理请求返回 HTTP {r.status_code}: {url}")
+                log.info(f"[JAV321 POST] 代理请求返回 HTTP {r.status_code}: {url}")
                 return None
             except Exception as e:
-                print(f"[JAV321 POST] 代理请求异常: {e}，正在尝试无代理直连...")
+                log.error(f"[JAV321 POST] 代理请求异常: {e}，正在尝试无代理直连...")
         
         # 2. 尝试无代理直连
         try:
@@ -90,7 +93,7 @@ class Jav321Adapter(BaseAdapter):
             if r.status_code == 200:
                 return r
         except Exception as e:
-            print(f"[JAV321 POST] 直连请求异常: {e}")
+            log.error(f"[JAV321 POST] 直连请求异常: {e}")
         return None
 
     def _parse_html(self, html: str, final_url: str, fallback_code: str) -> Optional[Dict[str, Any]]:
@@ -312,7 +315,7 @@ class Jav321Adapter(BaseAdapter):
                         f.write(r.content)
                     return True
             except Exception as e:
-                print(f"[JAV321 Download] 下载图片失败 {img_url}: {e}")
+                log.error(f"[JAV321 Download] 下载图片失败 {img_url}: {e}")
             return False
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:

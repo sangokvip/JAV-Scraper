@@ -13,3 +13,6 @@ Pillow>=10.0.0
 
 # 可选：在线播放服务器 (player/av_player_server.py)
 # flask>=3.0.0
+
+# 开发：单元测试
+# pytest>=7.0.0

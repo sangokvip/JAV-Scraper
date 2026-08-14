@@ -1,6 +1,9 @@
 import os
 import sys
 import subprocess
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 def open_local_folder(path: str) -> bool:
     """
@@ -20,7 +23,7 @@ def open_local_folder(path: str) -> bool:
             subprocess.Popen(['xdg-open', dir_path])
         return True
     except Exception as e:
-        print(f"打开文件夹失败 {dir_path}: {e}")
+        log.error(f"打开文件夹失败 {dir_path}: {e}")
         return False
 
 def play_video(video_path: str, custom_player_path: str = "") -> bool:
@@ -53,5 +56,5 @@ def play_video(video_path: str, custom_player_path: str = "") -> bool:
             subprocess.Popen(['xdg-open', video_path])
         return True
     except Exception as e:
-        print(f"调用播放器播放视频失败 {video_path}: {e}")
+        log.error(f"调用播放器播放视频失败 {video_path}: {e}")
         return False

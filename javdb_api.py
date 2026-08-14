@@ -54,6 +54,9 @@ from bs4 import BeautifulSoup
 
 import config
 from utils import JSONExporter, ImageDownloader, MagnetExporter, DataProcessor
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 
 class JavdbAPI:
@@ -167,7 +170,7 @@ class JavdbAPI:
             category = tag_info['category']
             tag_id = tag_info['tag_id']
             result[category] = tag_id
-            print(f"✓ 找到标签 '{tag_name}' -> {category}={tag_id}")
+            log.info(f"✓ 找到标签 '{tag_name}' -> {category}={tag_id}")
         else:
             # 尝试搜索相似标签
             similar_tags = self.tag_manager.search_tags_by_keyword(tag_name)
@@ -176,7 +179,7 @@ class JavdbAPI:
                 category = tag_info['category']
                 tag_id = tag_info['tag_id']
                 result[category] = tag_id
-                print(f"⚠ 未找到精确匹配 '{tag_name}'，使用相似标签 '{tag_info['name']}' -> {category}={tag_id}")
+                log.info(f"⚠ 未找到精确匹配 '{tag_name}'，使用相似标签 '{tag_info['name']}' -> {category}={tag_id}")
             else:
                 raise ValueError(f"未找到标签: '{tag_name}'，请检查标签名称是否正确")
     
@@ -899,7 +902,7 @@ class JavdbAPI:
 
         # 检查临时文件是否存在
         if temp_path.exists():
-            print(f"从临时文件加载: {temp_file}")
+            log.info(f"从临时文件加载: {temp_file}")
             with open(temp_path, 'r', encoding='utf-8') as f:
                 all_works = json.load(f)
             all_works = all_works.get('works', [])
@@ -907,7 +910,7 @@ class JavdbAPI:
             # 获取所有作品
             # 如果需要标签筛选，必须获取详细信息（因为基础信息中没有标签）
             need_details = get_details or (tags and len(tags) > 0)
-            print(f"获取演员 {actor_id} 的所有作品...")
+            log.info(f"获取演员 {actor_id} 的所有作品...")
             all_works = self.get_actor_works(actor_id, max_pages, need_details, download_images)
             
             # 保存到临时文件
@@ -920,7 +923,7 @@ class JavdbAPI:
                 }
                 with open(temp_path, 'w', encoding='utf-8') as f:
                     json.dump(temp_data, f, indent=2, ensure_ascii=False)
-                print(f"已保存 {len(all_works)} 个作品到临时文件: {temp_file}")
+                log.info(f"已保存 {len(all_works)} 个作品到临时文件: {temp_file}")
         
         # 筛选作品
         if not tags:
@@ -932,7 +935,7 @@ class JavdbAPI:
                 'temp_file': str(temp_path) if temp_path.exists() else None
             }
         
-        print(f"按标签筛选: {tags}")
+        log.info(f"按标签筛选: {tags}")
         filtered_works = []
 
         # tag_ids 格式是 ['c1=23', 'c3=78']，作品的 tags 存的是标签名文本，
@@ -944,7 +947,7 @@ class JavdbAPI:
                 if tag_info:
                     required_names.append(tag_info['name'])
                 else:
-                    print(f"⚠ 未知标签 ID: {tag_id}，忽略该筛选条件")
+                    log.info(f"⚠ 未知标签 ID: {tag_id}，忽略该筛选条件")
         elif tag_names:
             required_names = list(tag_names)
 
@@ -957,7 +960,7 @@ class JavdbAPI:
                 if all(name in work_tag_set for name in required_names):
                     filtered_works.append(work)
         
-        print(f"筛选结果: {len(filtered_works)}/{len(all_works)} 个作品")
+        log.info(f"筛选结果: {len(filtered_works)}/{len(all_works)} 个作品")
         
         return {
             'total_works': len(all_works),
@@ -2111,7 +2114,7 @@ try:
         convert_to_traditional,
     )
 except Exception as _tag_import_err:
-    print(f"⚠ tag_manager 模块不可用，标签功能禁用: {_tag_import_err}")
+    log.info(f"⚠ tag_manager 模块不可用，标签功能禁用: {_tag_import_err}")
 
 
 # ==================== 图片下载模块 ====================

@@ -1,5 +1,8 @@
 import os
 import shutil
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 SUBTITLE_EXTENSIONS = ('.srt', '.ass', '.ssa', '.vtt', '.sub')
 
@@ -33,7 +36,7 @@ def find_matching_subtitles(video_path: str) -> list:
                         entry_base_lower.startswith(video_base_lower + '.'):
                     subtitles.append(entry_path)
     except Exception as e:
-        print(f"扫描外挂字幕文件失败: {e}")
+        log.error(f"扫描外挂字幕文件失败: {e}")
         
     return subtitles
 
@@ -64,7 +67,7 @@ def move_and_rename_subtitles(video_path: str, target_video_path: str, subtitles
         if os.path.abspath(sub_path) != os.path.abspath(target_sub_path):
             # POSIX 上 rename 会静默覆盖，同名目标已存在时跳过以免丢字幕
             if os.path.exists(target_sub_path):
-                print(f"目标字幕已存在，跳过: {target_sub_path}")
+                log.info(f"目标字幕已存在，跳过: {target_sub_path}")
                 continue
             try:
                 os.rename(sub_path, target_sub_path)
@@ -76,6 +79,6 @@ def move_and_rename_subtitles(video_path: str, target_video_path: str, subtitles
                     os.remove(sub_path)
                     moved_subs.append(target_sub_path)
                 except Exception as e:
-                    print(f"字幕文件移动重命名失败 {sub_path} -> {target_sub_path}: {e}")
+                    log.error(f"字幕文件移动重命名失败 {sub_path} -> {target_sub_path}: {e}")
                     
     return moved_subs

@@ -11,6 +11,9 @@ from curl_cffi import requests
 from bs4 import BeautifulSoup
 
 import config
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 
 class JavdbLogin:
@@ -48,7 +51,7 @@ class JavdbLogin:
             password = config.LOGIN.get('password')
         
         if not username or not password:
-            print("错误: 未配置用户名或密码")
+            log.error("错误: 未配置用户名或密码")
             return False
         
         try:
@@ -63,19 +66,19 @@ class JavdbLogin:
             # 检查是否需要验证码
             captcha = soup.select_one('img[alt="captcha"], .captcha, #captcha, input[name="captcha"]')
             if captcha:
-                print("警告: 登录需要验证码，自动登录失败")
-                print("请手动在浏览器登录后，将 cookies 导出到 cookies.json 文件")
+                log.error("警告: 登录需要验证码，自动登录失败")
+                log.info("请手动在浏览器登录后，将 cookies 导出到 cookies.json 文件")
                 return False
             
             # 查找登录表单
             form = soup.select_one('form[action="/user_sessions"]')
             if not form:
-                print("错误: 未找到登录表单")
+                log.error("错误: 未找到登录表单")
                 return False
             
             token_input = form.select_one('input[name="authenticity_token"]')
             if not token_input:
-                print("错误: 未找到 authenticity_token")
+                log.error("错误: 未找到 authenticity_token")
                 return False
             
             authenticity_token = token_input.get('value', '')
@@ -104,25 +107,25 @@ class JavdbLogin:
             if error:
                 error_text = error.get_text(strip=True)
                 if '验证码' in error_text or 'captcha' in error_text.lower():
-                    print(f"登录失败: 需要验证码")
-                    print("请手动在浏览器登录后，将 cookies 导出到 cookies.json 文件")
+                    log.error(f"登录失败: 需要验证码")
+                    log.info("请手动在浏览器登录后，将 cookies 导出到 cookies.json 文件")
                 else:
-                    print(f"登录失败: {error_text}")
+                    log.error(f"登录失败: {error_text}")
                 return False
             
             # 检查是否仍在登录页
             if '/login' in response.url:
-                print("登录失败: 仍在登录页面，可能需要验证码")
+                log.error("登录失败: 仍在登录页面，可能需要验证码")
                 return False
             
             # 保存 cookies
             self._save_cookies()
-            print("登录成功，cookies 已保存")
+            log.info("登录成功，cookies 已保存")
             
             return True
             
         except Exception as e:
-            print(f"登录异常: {e}")
+            log.error(f"登录异常: {e}")
             return False
     
     def _confirm_over18(self):

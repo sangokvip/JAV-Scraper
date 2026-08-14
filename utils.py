@@ -11,6 +11,9 @@ from typing import List, Dict, Any
 from urllib.parse import urlparse
 from curl_cffi import requests
 from bs4 import BeautifulSoup
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 
 def _request_timeout() -> int:
@@ -106,7 +109,7 @@ class ImageDownloader:
                         f.write(response.content)
                 time.sleep(0.1)
             except Exception as e:
-                print(f"下载失败 {url}: {e}")
+                log.error(f"下载失败 {url}: {e}")
     
     def download_images(self, video_id: str, image_urls: List[Dict[str, str]], 
                        output_dir: str = "output/images",
@@ -165,12 +168,12 @@ class ImageDownloader:
                         f.write(response.content)
                     downloaded += 1
                     files.append(str(file_path))
-                    print(f"  ✅ 下载成功: {filename}")
+                    log.info(f"  ✅ 下载成功: {filename}")
                 else:
-                    print(f"  ⚠️ 下载失败 {filename}: HTTP {response.status_code}")
+                    log.error(f"  ⚠️ 下载失败 {filename}: HTTP {response.status_code}")
                 time.sleep(0.1)
             except Exception as e:
-                print(f"  ❌ 下载失败 {filename}: {e}")
+                log.error(f"  ❌ 下载失败 {filename}: {e}")
         
         return {
             'downloaded': downloaded,

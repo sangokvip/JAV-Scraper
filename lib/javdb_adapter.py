@@ -19,6 +19,9 @@ from utils import url_ext
 from .base_adapter import BaseAdapter
 from .platform import Platform
 from javdb_api import JavdbAPI
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 
 class JavdbAdapter(BaseAdapter):
@@ -78,7 +81,7 @@ class JavdbAdapter(BaseAdapter):
                     break
                 
             except Exception as e:
-                print(f"搜索失败: {e}")
+                log.error(f"搜索失败: {e}")
                 has_next = False
                 break
         
@@ -117,7 +120,7 @@ class JavdbAdapter(BaseAdapter):
                 "cover_url": detail.get("thumbnail_images", [""])[0] if detail.get("thumbnail_images") else ""
             }
         except Exception as e:
-            print(f"获取视频详情失败: {e}")
+            log.error(f"获取视频详情失败: {e}")
             return None
     
     def get_video_by_code(self, code: str) -> Optional[Dict[str, Any]]:
@@ -151,7 +154,7 @@ class JavdbAdapter(BaseAdapter):
                 "cover_url": detail.get("thumbnail_images", [""])[0] if detail.get("thumbnail_images") else ""
             }
         except Exception as e:
-            print(f"根据番号获取视频失败: {e}")
+            log.error(f"根据番号获取视频失败: {e}")
             return None
     
     def search_actor(self, actor_name: str) -> List[Dict[str, Any]]:
@@ -184,7 +187,7 @@ class JavdbAdapter(BaseAdapter):
                 })
             return normalized_actors
         except Exception as e:
-            print(f"搜索演员失败: {e}")
+            log.error(f"搜索演员失败: {e}")
             return []
     
     def get_actor_works(self, actor_id: str, page: int = 1, max_pages: int = 1) -> Dict[str, Any]:
@@ -228,7 +231,7 @@ class JavdbAdapter(BaseAdapter):
                 "works": all_works
             }
         except Exception as e:
-            print(f"获取演员作品失败: {e}")
+            log.error(f"获取演员作品失败: {e}")
             return {"page": page, "has_next": False, "works": []}
     
     def get_actor_works_full(self, actor_id: str, page: int = 1, max_pages: int = 1) -> Dict[str, Any]:
@@ -260,7 +263,7 @@ class JavdbAdapter(BaseAdapter):
             result["works"] = full_works
             return result
         except Exception as e:
-            print(f"获取演员作品详情失败: {e}")
+            log.error(f"获取演员作品详情失败: {e}")
             return {"page": page, "has_next": False, "works": []}
     
     def get_tag_works(self, tag_id: str, page: int = 1, max_pages: int = 1) -> Dict[str, Any]:
@@ -304,7 +307,7 @@ class JavdbAdapter(BaseAdapter):
                 "works": all_works
             }
         except Exception as e:
-            print(f"获取标签作品失败: {e}")
+            log.error(f"获取标签作品失败: {e}")
             return {"page": page, "has_next": False, "works": []}
     
     def search_by_tags(self, page: int = 1, max_pages: int = 1, **tag_params) -> Dict[str, Any]:
@@ -349,7 +352,7 @@ class JavdbAdapter(BaseAdapter):
                 "works": all_works
             }
         except Exception as e:
-            print(f"标签搜索失败: {e}")
+            log.error(f"标签搜索失败: {e}")
             return {"page": page, "has_next": False, "tag_params": tag_params, "works": []}
     
     def download_video_images(self, video_id: str, download_dir: str) -> Tuple[int, int]:
@@ -386,11 +389,11 @@ class JavdbAdapter(BaseAdapter):
                             f.write(response.content)
                         success_count += 1
                 except Exception as e:
-                    print(f"下载图片失败 {img_url}: {e}")
+                    log.error(f"下载图片失败 {img_url}: {e}")
             
             return success_count, len(thumbnail_images)
         except Exception as e:
-            print(f"下载视频图片失败: {e}")
+            log.error(f"下载视频图片失败: {e}")
             return 0, 0
     
     def convert_to_standard_format(self, videos: List[Dict[str, Any]]) -> Dict[str, List[Dict]]:

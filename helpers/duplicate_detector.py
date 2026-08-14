@@ -2,6 +2,9 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Optional
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 # 归档文件夹命名模式："[番号] 标题"，提取方括号内的番号
 _CODE_PREFIX_RE = re.compile(r"^\[([^\]]+)\]")
@@ -44,7 +47,7 @@ def build_organized_code_index(
                 else:
                     actor_dirs.append(entry.path)
     except OSError as e:
-        print(f"检索重复归档文件夹异常: {e}")
+        log.error(f"检索重复归档文件夹异常: {e}")
         return index
 
     def scan_actor_dir(path):

@@ -3,6 +3,9 @@ import json
 
 from config import PROJECT_ROOT
 from gui import task_status
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 DEFAULT_BACKUP_PATH = os.path.abspath(
     os.path.join(PROJECT_ROOT, "tasks_backup.json")
@@ -35,10 +38,10 @@ def _load_json_with_fallback(filepath: str):
             with open(candidate, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if candidate.endswith(".bak"):
-                print(f"主备份文件损坏，已从 {os.path.basename(candidate)} 回退恢复")
+                log.info(f"主备份文件损坏，已从 {os.path.basename(candidate)} 回退恢复")
             return data
         except Exception as e:
-            print(f"加载 {os.path.basename(candidate)} 失败: {e}")
+            log.error(f"加载 {os.path.basename(candidate)} 失败: {e}")
     return None
 
 def save_tasks_backup(task_files: dict, filepath: str = DEFAULT_BACKUP_PATH):
@@ -63,7 +66,7 @@ def save_tasks_backup(task_files: dict, filepath: str = DEFAULT_BACKUP_PATH):
             
         _atomic_dump(serializable_tasks, filepath)
     except Exception as e:
-        print(f"保存任务备份失败: {e}")
+        log.error(f"保存任务备份失败: {e}")
 
 def load_tasks_backup(filepath: str = DEFAULT_BACKUP_PATH) -> dict:
     """
@@ -94,7 +97,7 @@ def load_tasks_backup(filepath: str = DEFAULT_BACKUP_PATH) -> dict:
                 }
         return restored_tasks
     except Exception as e:
-        print(f"加载任务备份失败: {e}")
+        log.error(f"加载任务备份失败: {e}")
         return {}
 
 DEFAULT_SETTINGS_PATH = os.path.abspath(
@@ -108,7 +111,7 @@ def save_settings_backup(settings: dict, filepath: str = DEFAULT_SETTINGS_PATH):
     try:
         _atomic_dump(settings, filepath)
     except Exception as e:
-        print(f"保存设置失败: {e}")
+        log.error(f"保存设置失败: {e}")
 
 def load_settings_backup(filepath: str = DEFAULT_SETTINGS_PATH) -> dict:
     """

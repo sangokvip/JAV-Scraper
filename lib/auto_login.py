@@ -12,6 +12,9 @@ from pathlib import Path
 import time
 
 import config
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 
 class CookieReceiverHandler(BaseHTTPRequestHandler):
@@ -278,7 +281,7 @@ WxfOVU11nGDFZ79PnSUnPdkhvwY7ptpqqsm1lrlKO%2F2yuTDVmCno%2FOtDT8FC%2BoiFT2IXNobjsS
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({'success': False, 'error': 'Forbidden origin'}).encode('utf-8'))
-                print(f"❌ 拒绝跨站 cookie 写入请求，Origin: {origin}")
+                log.info(f"❌ 拒绝跨站 cookie 写入请求，Origin: {origin}")
                 return
 
             # 保存 cookies
@@ -308,7 +311,7 @@ WxfOVU11nGDFZ79PnSUnPdkhvwY7ptpqqsm1lrlKO%2F2yuTDVmCno%2FOtDT8FC%2BoiFT2IXNobjsS
                 response = {'success': True, 'message': 'Cookies saved successfully'}
                 self.wfile.write(json.dumps(response).encode('utf-8'))
                 
-                print(f"✅ Cookies 已保存到 {config.COOKIE_FILE}")
+                log.info(f"✅ Cookies 已保存到 {config.COOKIE_FILE}")
                 
             except Exception as e:
                 self.send_response(500)
@@ -316,7 +319,7 @@ WxfOVU11nGDFZ79PnSUnPdkhvwY7ptpqqsm1lrlKO%2F2yuTDVmCno%2FOtDT8FC%2BoiFT2IXNobjsS
                 self.end_headers()
                 response = {'success': False, 'error': str(e)}
                 self.wfile.write(json.dumps(response).encode('utf-8'))
-                print(f"❌ 保存 cookies 失败: {e}")
+                log.error(f"❌ 保存 cookies 失败: {e}")
         
         else:
             self.send_response(404)
@@ -343,34 +346,34 @@ class AutoLogin:
                 self.server_thread = threading.Thread(target=self.server.serve_forever)
                 self.server_thread.daemon = True
                 self.server_thread.start()
-                print(f"✅ 本地服务器已启动: http://localhost:{self.port}")
+                log.info(f"✅ 本地服务器已启动: http://localhost:{self.port}")
                 return True
             except OSError as e:
                 if e.errno == 48:  # Address already in use
-                    print(f"⚠️  端口 {self.port} 已被占用，尝试使用其他端口...")
+                    log.info(f"⚠️  端口 {self.port} 已被占用，尝试使用其他端口...")
                     self.port += 1
                 else:
-                    print(f"❌ 启动服务器失败: {e}")
+                    log.error(f"❌ 启动服务器失败: {e}")
                     return False
-        print(f"❌ 连续 {max_retries} 个端口均被占用，放弃启动")
+        log.info(f"❌ 连续 {max_retries} 个端口均被占用，放弃启动")
         return False
     
     def stop_server(self):
         """停止服务器"""
         if self.server:
             self.server.shutdown()
-            print("✅ 本地服务器已停止")
+            log.info("✅ 本地服务器已停止")
     
     def open_login_page(self):
         """打开登录助手页面"""
         url = f"http://localhost:{self.port}"
-        print(f"🌐 正在打开浏览器: {url}")
+        log.info(f"🌐 正在打开浏览器: {url}")
         webbrowser.open(url)
     
     def wait_for_cookies(self, timeout=300):
         """等待 cookies 保存"""
-        print(f"⏳ 等待用户登录并提交 cookies (最长 {timeout} 秒)...")
-        print(f"💡 提示: 请在浏览器中完成登录并提交 cookies")
+        log.info(f"⏳ 等待用户登录并提交 cookies (最长 {timeout} 秒)...")
+        log.info(f"💡 提示: 请在浏览器中完成登录并提交 cookies")
         
         cookie_file = Path(config.COOKIE_FILE)
         start_time = time.time()
@@ -379,18 +382,18 @@ class AutoLogin:
             if cookie_file.exists():
                 file_time = cookie_file.stat().st_mtime
                 if file_time > start_time:
-                    print("✅ 检测到 cookies 已更新！")
+                    log.info("✅ 检测到 cookies 已更新！")
                     return True
             time.sleep(1)
         
-        print(f"⏱️  等待超时 ({timeout} 秒)")
+        log.info(f"⏱️  等待超时 ({timeout} 秒)")
         return False
     
     def run(self, timeout=300):
         """运行自动化登录流程"""
-        print("=" * 70)
-        print("🔐 JAVDB 自动化登录助手")
-        print("=" * 70)
+        log.info("=" * 70)
+        log.info("🔐 JAVDB 自动化登录助手")
+        log.info("=" * 70)
         
         # 启动服务器
         if not self.start_server():
@@ -423,5 +426,5 @@ def auto_login(timeout=300):
 
 
 if __name__ == "__main__":
-    print("启动 JAVDB 自动化登录助手...")
+    log.info("启动 JAVDB 自动化登录助手...")
     auto_login()

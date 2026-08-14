@@ -30,6 +30,9 @@ from helpers.subtitle_helper import find_matching_subtitles
 from helpers.duplicate_detector import build_organized_code_index
 from helpers.player_helper import play_video, open_local_folder
 from helpers.template_helper import format_target_path
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 # 支持的视频扩展名（导入过滤与目标目录扫描共用）
 VIDEO_EXTENSIONS = ('.mp4', '.mkv', '.avi', '.wmv', '.mov', '.flv', '.rmvb')
@@ -1092,7 +1095,7 @@ class Controller:
             self.save_backup()
             self.apply_task_filter()
         except Exception as e:
-            print(f"Error on_worker_started: {e}")
+            log.error(f"Error on_worker_started: {e}")
 
     def on_worker_progress(self, filepath, message):
         if filepath not in self.task_files:
@@ -1158,7 +1161,7 @@ class Controller:
                 self.view.table.removeCellWidget(row, 3)
                 self.view.table.setItem(row, 3, QTableWidgetItem(message))
         except Exception as e:
-            print(f"Error on_worker_progress: {e}")
+            log.error(f"Error on_worker_progress: {e}")
 
     def on_worker_preview_loaded(self, filepath, detail):
         if filepath not in self.task_files:
@@ -1175,7 +1178,7 @@ class Controller:
                 try:
                     self.show_preview_details(detail, filepath)
                 except Exception as e:
-                    print(f"Error show_preview_details in preview_loaded: {e}")
+                    log.error(f"Error show_preview_details in preview_loaded: {e}")
 
     def on_worker_finished(self, filepath, status):
         if filepath not in self.task_files:
@@ -1219,7 +1222,7 @@ class Controller:
                 self.save_backup()
                 self.apply_task_filter()
             except Exception as e:
-                print(f"Error updating UI in on_worker_finished: {e}")
+                log.error(f"Error updating UI in on_worker_finished: {e}")
 
         # 检查是否所有正在执行的任务都已执行完毕
         all_done = True
@@ -1642,7 +1645,7 @@ class Controller:
             with open(cookie_path, 'w', encoding='utf-8') as f:
                 json.dump(cookies_dict, f, indent=2)
         except Exception as e:
-            print(f"自动保存 Cookie 失败: {e}")
+            log.error(f"自动保存 Cookie 失败: {e}")
 
     def retry_failed_tasks(self):
         # 按失败阶段分别重试：有 detail 说明刮削已成功、失败发生在整理阶段。

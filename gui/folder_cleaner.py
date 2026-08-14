@@ -1,4 +1,7 @@
 import os
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 def clean_empty_parent_dirs(parent_dirs) -> list[str]:
     """
@@ -47,7 +50,7 @@ def clean_empty_parent_dirs(parent_dirs) -> list[str]:
             if not remaining:
                 empty_dirs.append(abs_pdir)
         except Exception as e:
-            print(f"检查文件夹空状态失败 {abs_pdir}: {e}")
+            log.error(f"检查文件夹空状态失败 {abs_pdir}: {e}")
 
     return empty_dirs
 
@@ -64,5 +67,5 @@ def remove_empty_dir(pdir: str) -> bool:
         os.rmdir(pdir)
         return True
     except Exception as e:
-        print(f"删除文件夹失败 {pdir}: {e}")
+        log.error(f"删除文件夹失败 {pdir}: {e}")
         return False

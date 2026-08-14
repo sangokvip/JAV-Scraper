@@ -122,12 +122,13 @@ build_win.bat
 
 ---
 
-## 🧪 开发者单元测试 (TDD)
+## 🧪 开发者单元测试
 
-为确保任何逻辑修改不会对原业务产生 Regression 倒退隐患，您可以在终端中直接运行全量测试，验证项目的极佳健康度：
+`tests/` 覆盖 javdb 解析层（HTML 结构快照）、番号提取、任务状态机、持久化原子写、限速器与磁盘缓存。安装 `pip install pytest` 后运行：
 ```bash
-python3 -m pytest -v
+python3 -m pytest tests/ -v
 ```
+解析层测试基于 `tests/fixtures/` 的页面结构快照——javdb 改版导致 selector 失效时，测试会先于线上报错暴露问题。
 
 ---
 

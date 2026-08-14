@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .crypto_utils import CryptoUtils, DEFAULT_KEY
+from lib.logger import get_logger
+
+log = get_logger(__name__)
 
 
 class TagManager:
@@ -43,7 +46,7 @@ class TagManager:
     def _load_database(self):
         """加载加密数据库"""
         if not self.database_path.exists():
-            print(f"警告: 标签数据库文件不存在: {self.database_path}")
+            log.info(f"警告: 标签数据库文件不存在: {self.database_path}")
             return
         
         try:
@@ -87,9 +90,9 @@ class TagManager:
                         self._name_to_id_cache[tag_name] = full_tag_id
                         self._id_to_name_cache[full_tag_id] = tag_name
             
-            print(f"成功加载 {len(self._tag_cache)} 个标签")
+            log.info(f"成功加载 {len(self._tag_cache)} 个标签")
         except Exception as e:
-            print(f"加载标签数据库失败: {e}")
+            log.error(f"加载标签数据库失败: {e}")
             import traceback
             traceback.print_exc()
     

@@ -250,23 +250,34 @@ class ScrapeWorker(QRunnable):
                 if os.path.commonpath([abs_nfo, abs_output]) != abs_output:
                     raise PermissionError(f"安全校验失败：NFO 写路径试图跳出根保存目录 ({abs_nfo})")
                 
-                # 是否判定为中文字幕
+                # 是否判定为中文字幕。
+                # 注意不能用 self.code.endswith("C")：code_extractor 在提取时
+                # 已剥掉 -C/-CH 后缀，只能回看原始文件名。
+                orig_name = os.path.basename(self.file_path)
+                has_c_suffix = bool(
+                    re.search(r'(?i)[-_](ch|c)\b', orig_name)
+                    or re.search(r'(?<=\d)[cC]\b', orig_name)
+                    or "中文" in orig_name or "字幕" in orig_name
+                )
                 is_chinese_sub = False
-                if self.code.endswith("C") or "中文字幕" in detail.get("tags", []) or has_subtitle_file:
+                if has_c_suffix or "中文字幕" in detail.get("tags", []) or has_subtitle_file:
                     is_chinese_sub = True
                     
                 tags = list(detail.get("tags", []))
                 if is_chinese_sub and self.write_subtitle_tag and "中文字幕" not in tags:
                     tags.append("中文字幕")
                 
+                # studio 只放片商（series 是合集概念，写 <set>，混进 studio 会
+                # 污染媒体库的片商筛选）
                 nfo_data = {
                     "code": self.code,
                     "title": detail.get("title", ""),
                     "date": detail.get("date", ""),
-                    "studio": detail.get("series", "") or detail.get("maker", "") or detail.get("publisher", "") or detail.get("producer", ""),
+                    "studio": detail.get("maker", "") or detail.get("publisher", "") or detail.get("producer", ""),
+                    "series": detail.get("series", ""),
                     "tags": tags,
                     "actors": detail.get("actors", []),
-                    "plot": ""
+                    "plot": detail.get("plot", "")
                 }
                 from lib.nfo_generator import generate_nfo
                 generate_nfo(nfo_data, nfo_path)
@@ -284,6 +295,9 @@ class ScrapeWorker(QRunnable):
                             self.signals.finished.emit(self.file_path, "cancelled")
                             return
                         with open(os.path.join(target_folder, "poster.jpg"), "wb") as f:
+                            f.write(r.content)
+                        # NFO 引用了 fanart.jpg，必须真实落盘一份
+                        with open(os.path.join(target_folder, "fanart.jpg"), "wb") as f:
                             f.write(r.content)
 
                 # 6. 下载样品预览图 (根据偏好设置控制)

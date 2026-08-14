@@ -19,7 +19,13 @@ def generate_nfo(data: dict, output_path: str):
     
     # 片商
     ET.SubElement(root, "studio").text = data.get("studio", "")
-    
+
+    # 系列 → <set>（Kodi/Jellyfin 的合集字段，勿与片商混写）
+    series = data.get("series", "")
+    if series:
+        set_el = ET.SubElement(root, "set")
+        ET.SubElement(set_el, "name").text = series
+
     # 标签
     for tag in data.get("tags", []):
         ET.SubElement(root, "genre").text = tag

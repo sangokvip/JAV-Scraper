@@ -1,40 +1,83 @@
 import os
 import re
-from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Callable, Optional
 
-def find_existing_organized_folder(output_dir: str, code: str) -> Optional[str]:
+# 归档文件夹命名模式："[番号] 标题"，提取方括号内的番号
+_CODE_PREFIX_RE = re.compile(r"^\[([^\]]+)\]")
+
+
+def build_organized_code_index(
+    output_dir: str,
+    cancel_check: Optional[Callable[[], bool]] = None,
+    progress: Optional[Callable[[int, int], None]] = None,
+    max_workers: int = 16,
+) -> dict:
     """
-    检索目标归档目录下是否已存在对应番号的归档文件夹。
-    采用两级遍历（第一级：主演文件夹/未知演员；第二级：具体番号归档文件夹）。
-    支持不区分大小写匹配，匹配模式为 "[番号] *"。
+    单次遍历目标归档目录，返回 {番号大写: 归档文件夹路径} 索引。
+    支持两级结构（演员/番号 或 扁平番号），供批量防重校验一次查完。
+
+    网络盘（SMB/NFS）上每次 listdir/stat 都是一趟往返：
+    用 scandir 免掉逐条目 stat，第二层用线程池并发扫，
+    cancel_check 返回 True 时尽快放弃，progress(done, total) 报告二层扫描进度。
     """
-    if not output_dir or not os.path.isdir(output_dir) or not code:
-        return None
-    
-    code_escaped = re.escape(code.upper())
-    # 匹配以 "[番号]" 开头的文件夹，防范子串误匹配
-    pattern = re.compile(rf"^\[{code_escaped}\].*", re.IGNORECASE)
-    
+    index = {}
+    if not output_dir or not os.path.isdir(output_dir):
+        return index
+
+    cancelled = cancel_check or (lambda: False)
+    actor_dirs = []
     try:
-        # 第一层遍历 (如：主演子文件夹或直接是番号文件夹)
-        for level1_entry in os.listdir(output_dir):
-            level1_path = os.path.join(output_dir, level1_entry)
-            if not os.path.isdir(level1_path):
-                continue
-            
-            # 直接匹配（扁平化整理无演员子文件夹）
-            if pattern.match(level1_entry):
-                return level1_path
-                
-            # 第二层遍历 (演员/番号 结构)
-            try:
-                for level2_entry in os.listdir(level1_path):
-                    level2_path = os.path.join(level1_path, level2_entry)
-                    if os.path.isdir(level2_path) and pattern.match(level2_entry):
-                        return level2_path
-            except Exception:
-                continue
-    except Exception as e:
+        with os.scandir(output_dir) as it:
+            for entry in it:
+                if cancelled():
+                    return index
+                try:
+                    if not entry.is_dir():
+                        continue
+                except OSError:
+                    continue
+                m = _CODE_PREFIX_RE.match(entry.name)
+                if m:
+                    # 扁平结构：根目录下直接是番号文件夹
+                    index.setdefault(m.group(1).upper(), entry.path)
+                else:
+                    actor_dirs.append(entry.path)
+    except OSError as e:
         print(f"检索重复归档文件夹异常: {e}")
-        
-    return None
+        return index
+
+    def scan_actor_dir(path):
+        found = []
+        try:
+            with os.scandir(path) as it2:
+                for entry in it2:
+                    if cancelled():
+                        break
+                    try:
+                        if not entry.is_dir():
+                            continue
+                    except OSError:
+                        continue
+                    m2 = _CODE_PREFIX_RE.match(entry.name)
+                    if m2:
+                        found.append((m2.group(1).upper(), entry.path))
+        except OSError:
+            pass
+        return found
+
+    total = len(actor_dirs)
+    done = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(scan_actor_dir, p) for p in actor_dirs]
+        for future in as_completed(futures):
+            if cancelled():
+                for f in futures:
+                    f.cancel()
+                break
+            done += 1
+            if progress:
+                progress(done, total)
+            for code, path in future.result():
+                index.setdefault(code, path)
+    return index

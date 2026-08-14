@@ -26,7 +26,7 @@ from gui.image_loader import ImageLoadWorker, SearchWorker
 
 # 导入公共辅助类
 from helpers.subtitle_helper import find_matching_subtitles
-from helpers.duplicate_detector import find_existing_organized_folder
+from helpers.duplicate_detector import build_organized_code_index
 from helpers.player_helper import play_video, open_local_folder
 from helpers.template_helper import format_target_path
 
@@ -872,6 +872,48 @@ class Controller:
         self.save_backup()
         self.apply_task_filter()
 
+    def _scan_organized_index_with_progress(self, output_dir: str) -> dict or None:
+        """
+        后台线程扫描归档目录建立 {番号: 路径} 索引，
+        前台弹可取消的进度框保持 UI 响应。用户取消返回 None。
+        """
+        import threading
+        import time
+        from PySide6.QtWidgets import QApplication, QProgressDialog
+
+        dlg = QProgressDialog("正在检查目标目录中的已归档影片...", "取消", 0, 0, self.view)
+        dlg.setWindowTitle("防重预检")
+        dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        dlg.setMinimumDuration(300)
+
+        state = {"done": False, "cancelled": False, "scanned": 0, "total": 0}
+        result = {}
+
+        def on_progress(done, total):
+            state["scanned"] = done
+            state["total"] = total
+
+        def work():
+            result.update(build_organized_code_index(
+                output_dir,
+                cancel_check=lambda: state["cancelled"],
+                progress=on_progress,
+            ))
+            state["done"] = True
+
+        threading.Thread(target=work, daemon=True).start()
+        while not state["done"]:
+            if dlg.wasCanceled():
+                state["cancelled"] = True
+                return None
+            if state["total"]:
+                dlg.setLabelText(
+                    f"正在检查目标目录中的已归档影片... ({state['scanned']}/{state['total']})")
+            QApplication.processEvents()
+            time.sleep(0.03)
+        dlg.close()
+        return result
+
     def pre_check_conflicts_and_prompt(self, file_paths: list, output_dir: str) -> str or None:
         """
         进行整理前的番号归档防重冲突校验。
@@ -887,12 +929,19 @@ class Controller:
             if reply != QMessageBox.StandardButton.Yes:
                 return None
 
-        # 扫描重名目录
+        # 扫描重名目录：一次性后台建索引（NAS 上逐番号全扫会把 UI 冻死几分钟）
+        check_files = [
+            fp for fp in file_paths
+            if (info := self.task_files.get(fp)) and info["code"] and info.get("detail")
+        ]
         conflicts = []
-        for fp in file_paths:
-            info = self.task_files.get(fp)
-            if info and info["code"] and info.get("detail"):
-                existing = find_existing_organized_folder(output_dir, info["code"])
+        if check_files:
+            index = self._scan_organized_index_with_progress(output_dir)
+            if index is None:
+                return None  # 用户取消扫描
+            for fp in check_files:
+                info = self.task_files[fp]
+                existing = index.get(info["code"].upper())
                 if existing:
                     conflicts.append((fp, info["code"], existing))
 

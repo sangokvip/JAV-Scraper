@@ -12,10 +12,20 @@ def generate_nfo(data: dict, output_path: str):
     # 番号 ID
     uniqueid = ET.SubElement(root, "uniqueid", type="num", default="true")
     uniqueid.text = data.get("code", "")
-    
+    if data.get("javdb_id"):
+        javdb_uid = ET.SubElement(root, "uniqueid", type="javdb")
+        javdb_uid.text = data["javdb_id"]
+
     # 发行日期
-    ET.SubElement(root, "premiered").text = data.get("date", "")
-    ET.SubElement(root, "releasedate").text = data.get("date", "")
+    date = data.get("date", "")
+    ET.SubElement(root, "premiered").text = date
+    ET.SubElement(root, "releasedate").text = date
+    if len(date) >= 4 and date[:4].isdigit():
+        ET.SubElement(root, "year").text = date[:4]
+
+    # 评分（10 分制）
+    if data.get("rating"):
+        ET.SubElement(root, "rating").text = str(data["rating"])
     
     # 片商
     ET.SubElement(root, "studio").text = data.get("studio", "")
@@ -26,9 +36,12 @@ def generate_nfo(data: dict, output_path: str):
         set_el = ET.SubElement(root, "set")
         ET.SubElement(set_el, "name").text = series
 
-    # 标签
-    for tag in data.get("tags", []):
+    # 标签：genre 只放前 5 个主类别（javdb 单片可有 20+ 标签，
+    # 全塞 genre 会淹没媒体库的类型筛选），完整列表进 tag
+    tags = data.get("tags", [])
+    for tag in tags[:5]:
         ET.SubElement(root, "genre").text = tag
+    for tag in tags:
         ET.SubElement(root, "tag").text = tag
         
     # 演员
@@ -39,6 +52,10 @@ def generate_nfo(data: dict, output_path: str):
         
     # 简介
     ET.SubElement(root, "plot").text = data.get("plot", "")
+
+    # 预告片
+    if data.get("trailer"):
+        ET.SubElement(root, "trailer").text = data["trailer"]
     
     # 海报/背景图：顶层 <poster>/<fanart> 兼容部分刮削器，
     # <art> 包裹的写法才是 Kodi movie.nfo 标准，两者都写

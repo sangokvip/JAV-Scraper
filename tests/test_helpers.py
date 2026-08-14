@@ -108,12 +108,30 @@ def test_nfo_fields(tmp_path):
     generate_nfo({
         "code": "ABC-123", "title": "T", "date": "2026-01-01",
         "studio": "片商S", "series": "系列X",
-        "tags": ["a", "b"], "actors": ["n"], "plot": "p",
+        "tags": [f"t{i}" for i in range(8)], "actors": ["n"], "plot": "p",
+        "rating": "8.9", "trailer": "https://cdn.example.com/p.mp4",
+        "javdb_id": "YwG8Ve",
     }, out)
     content = open(out, encoding="utf-8").read()
     assert "<studio>片商S</studio>" in content
     assert "<name>系列X</name>" in content        # series 进 <set>，不进 studio
     assert "系列X</studio>" not in content
     assert "<plot>p</plot>" in content
-    assert content.count("<genre>") == 2
+    assert "<rating>8.9</rating>" in content
+    assert "<trailer>https://cdn.example.com/p.mp4</trailer>" in content
+    assert '<uniqueid type="javdb">YwG8Ve</uniqueid>' in content
+    assert "<year>2026</year>" in content
+    assert content.count("<genre>") == 5          # genre 封顶 5 个
+    assert content.count("<tag>") == 8            # tag 保留全量
     assert "fanart.jpg" in content
+
+
+def test_nfo_optional_fields_absent(tmp_path):
+    out = str(tmp_path / "t2.nfo")
+    generate_nfo({"code": "ABC-1", "title": "T", "date": "", "studio": "",
+                  "tags": [], "actors": [], "plot": ""}, out)
+    content = open(out, encoding="utf-8").read()
+    assert "<rating>" not in content
+    assert "<trailer>" not in content
+    assert "<year>" not in content
+    assert 'type="javdb"' not in content

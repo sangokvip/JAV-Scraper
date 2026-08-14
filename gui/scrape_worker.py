@@ -299,6 +299,12 @@ class ScrapeWorker(QRunnable):
                 
                 # studio 只放片商（series 是合集概念，写 <set>，混进 studio 会
                 # 污染媒体库的片商筛选）
+                # javdb 评分是 5 分制文本（如 "4.48分, 由652人評價"），换算 10 分制
+                rating_10 = ""
+                rating_match = re.search(r'(\d+(?:\.\d+)?)', str(detail.get("rating", "")))
+                if rating_match:
+                    rating_10 = f"{float(rating_match.group(1)) * 2:.1f}"
+
                 nfo_data = {
                     "code": self.code,
                     "title": detail.get("title", ""),
@@ -307,7 +313,10 @@ class ScrapeWorker(QRunnable):
                     "series": detail.get("series", ""),
                     "tags": tags,
                     "actors": detail.get("actors", []),
-                    "plot": detail.get("plot", "")
+                    "plot": detail.get("plot", ""),
+                    "rating": rating_10,
+                    "trailer": detail.get("preview_video", ""),
+                    "javdb_id": detail.get("video_id", ""),
                 }
                 from lib.nfo_generator import generate_nfo
                 generate_nfo(nfo_data, nfo_path)

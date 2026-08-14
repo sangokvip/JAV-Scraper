@@ -447,7 +447,11 @@ class JavdbAPI:
         if not work:
             return None
 
-        return self.get_video_detail(work['video_id'], download_images)
+        detail = self.get_video_detail(work['video_id'], download_images)
+        # 评分只在列表页出现，透传给详情（NFO <rating> 用）
+        if detail is not None and work.get('rating') and not detail.get('rating'):
+            detail['rating'] = work['rating']
+        return detail
     
     def _extract_title(self, soup: BeautifulSoup) -> str:
         """提取标题"""

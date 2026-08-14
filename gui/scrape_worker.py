@@ -1,12 +1,30 @@
+import json
 import os
 import re
 import shutil
+import threading
 import traceback
 import requests
 from PySide6.QtCore import QRunnable, QObject, Signal
 from lib import AdapterFactory
+from lib import detail_cache
 from helpers.subtitle_helper import find_matching_subtitles, move_and_rename_subtitles
 from helpers.template_helper import format_target_path
+
+# 线程本地适配器缓存：QThreadPool 的每个工作线程复用自己的实例
+# （连接与 TLS 会话得以保持），线程之间互不共享（并发安全）。
+# 切勿改回 AdapterFactory 的类级单例——多 worker 并发时会互相清除实例。
+_thread_local = threading.local()
+
+
+def _get_thread_adapter(platform_name: str, proxies: dict = None):
+    key = f"{platform_name}:{json.dumps(proxies, sort_keys=True, default=str)}"
+    cache = getattr(_thread_local, 'adapters', None)
+    if cache is None:
+        cache = _thread_local.adapters = {}
+    if key not in cache:
+        cache[key] = AdapterFactory.create_adapter(platform_name, proxies=proxies)
+    return cache[key]
 
 class WorkerSignals(QObject):
     started = Signal(str)           # filepath
@@ -19,7 +37,8 @@ class ScrapeWorker(QRunnable):
     def __init__(self, file_path: str, code: str, output_dir: str, platform: str, proxies: dict = None, 
                  only_scrape: bool = False, cached_detail: dict = None, extra_files: list = None,
                  rename_template: str = "{actor}/{[code]} {title}", download_samples: bool = True,
-                 write_subtitle_tag: bool = True, conflict_resolution: str = "keep_both"):
+                 write_subtitle_tag: bool = True, conflict_resolution: str = "keep_both",
+                 force_refresh: bool = False):
         super().__init__()
         self.file_path = file_path
         self.code = code
@@ -33,6 +52,7 @@ class ScrapeWorker(QRunnable):
         self.download_samples = download_samples
         self.write_subtitle_tag = write_subtitle_tag
         self.conflict_resolution = conflict_resolution
+        self.force_refresh = force_refresh
         self.signals = WorkerSignals()
         self.is_cancelled = False
 
@@ -91,20 +111,27 @@ class ScrapeWorker(QRunnable):
                     self.signals.progress.emit(self.file_path, "使用已缓存的刮削数据...")
                 else:
                     detail = None
-                    try:
-                        if self.is_cancelled:
-                            self.signals.finished.emit(self.file_path, "cancelled")
-                            return
-                        self.signals.progress.emit(self.file_path, "正在从 JAVDB 平台刮削数据...")
-                        AdapterFactory.clear_instance()
-                        adapter = AdapterFactory.get_adapter_by_name(
-                            "javdb", 
-                            proxies=self.proxies
-                        )
-                        detail = adapter.get_video_by_code(self.code)
-                    except Exception as scrape_err:
-                        last_error = scrape_err
-                        print(f"[JAVDB] 刮削过程中发生网络异常: {scrape_err}")
+
+                    # 磁盘缓存：TTL 内同番号重复刮削零网络请求。
+                    # 用户明确要求重新刮削时（force_refresh）跳过缓存
+                    if not self.force_refresh:
+                        detail = detail_cache.get("javdb", self.code)
+                        if detail:
+                            self.signals.progress.emit(self.file_path, "命中本地刮削缓存...")
+
+                    if not detail:
+                        try:
+                            if self.is_cancelled:
+                                self.signals.finished.emit(self.file_path, "cancelled")
+                                return
+                            self.signals.progress.emit(self.file_path, "正在从 JAVDB 平台刮削数据...")
+                            adapter = _get_thread_adapter("javdb", self.proxies)
+                            detail = adapter.get_video_by_code(self.code)
+                            if detail:
+                                detail_cache.put("javdb", self.code, detail)
+                        except Exception as scrape_err:
+                            last_error = scrape_err
+                            print(f"[JAVDB] 刮削过程中发生网络异常: {scrape_err}")
 
                     # 若 JAVDB 刮削失败或返回空，降级回退至 JAV321 直连
                     if not detail:
@@ -113,10 +140,10 @@ class ScrapeWorker(QRunnable):
                                 self.signals.finished.emit(self.file_path, "cancelled")
                                 return
                             self.signals.progress.emit(self.file_path, "JAVDB 刮削失败，正在降级回退至 JAV321 (直连)...")
-                            AdapterFactory.clear_instance()
-                            adapter_fallback = AdapterFactory.get_adapter_by_name("jav321", proxies=self.proxies)
+                            adapter_fallback = _get_thread_adapter("jav321", self.proxies)
                             detail = adapter_fallback.get_video_by_code(self.code)
                             if detail:
+                                detail_cache.put("javdb", self.code, detail)
                                 self.signals.progress.emit(self.file_path, "成功从 JAV321 平台获取到刮削数据。")
                         except Exception as fallback_err:
                             last_error = fallback_err

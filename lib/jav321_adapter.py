@@ -39,6 +39,8 @@ class Jav321Adapter(BaseAdapter):
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8"
         }
+        # 复用连接：裸 requests.get 每次都重建 TCP/TLS
+        self.http = requests.Session()
     
     def get_platform(self) -> Platform:
         """返回平台类型"""
@@ -49,7 +51,7 @@ class Jav321Adapter(BaseAdapter):
         # 1. 尝试使用代理
         if self.proxies:
             try:
-                r = requests.get(url, headers=self.headers, proxies=self.proxies, timeout=timeout, allow_redirects=True)
+                r = self.http.get(url, headers=self.headers, proxies=self.proxies, timeout=timeout, allow_redirects=True)
                 if r.status_code == 200:
                     return r
                 # 服务端明确返回了 HTTP 错误（404/403 等）——不是网络问题，
@@ -61,7 +63,7 @@ class Jav321Adapter(BaseAdapter):
 
         # 2. 尝试无代理直连（无代理配置，或代理网络异常时）
         try:
-            r = requests.get(url, headers=self.headers, timeout=timeout, allow_redirects=True)
+            r = self.http.get(url, headers=self.headers, timeout=timeout, allow_redirects=True)
             if r.status_code == 200:
                 return r
             print(f"[JAV321 GET] 直连请求返回 HTTP {r.status_code}: {url}")
@@ -74,7 +76,7 @@ class Jav321Adapter(BaseAdapter):
         # 1. 尝试使用代理
         if self.proxies:
             try:
-                r = requests.post(url, headers=self.headers, data=data, proxies=self.proxies, timeout=timeout, allow_redirects=True)
+                r = self.http.post(url, headers=self.headers, data=data, proxies=self.proxies, timeout=timeout, allow_redirects=True)
                 if r.status_code == 200:
                     return r
                 print(f"[JAV321 POST] 代理请求返回 HTTP {r.status_code}: {url}")
@@ -84,7 +86,7 @@ class Jav321Adapter(BaseAdapter):
         
         # 2. 尝试无代理直连
         try:
-            r = requests.post(url, headers=self.headers, data=data, timeout=timeout, allow_redirects=True)
+            r = self.http.post(url, headers=self.headers, data=data, timeout=timeout, allow_redirects=True)
             if r.status_code == 200:
                 return r
         except Exception as e:
@@ -291,7 +293,7 @@ class Jav321Adapter(BaseAdapter):
                 headers = {"User-Agent": self.headers["User-Agent"]}
                 if self.proxies:
                     try:
-                        r = requests.get(img_url, headers=headers, proxies=self.proxies, timeout=10)
+                        r = self.http.get(img_url, headers=headers, proxies=self.proxies, timeout=10)
                         if r.status_code == 200:
                             ext = url_ext(img_url)
                             file_path = video_dir / f"{idx:03d}.{ext}"
@@ -302,7 +304,7 @@ class Jav321Adapter(BaseAdapter):
                         pass # 代理下载失败， fallback 到直连下载
                 
                 # 直连下载
-                r = requests.get(img_url, headers=headers, timeout=10)
+                r = self.http.get(img_url, headers=headers, timeout=10)
                 if r.status_code == 200:
                     ext = url_ext(img_url)
                     file_path = video_dir / f"{idx:03d}.{ext}"

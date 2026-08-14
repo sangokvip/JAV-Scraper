@@ -73,9 +73,10 @@ class Controller:
         self.view = view
         self.thread_pool = QThreadPool.globalInstance()
         
-        # 专用的刮削线程池，限制并发为 1，防范高频并发被平台封锁 IP
+        # 专用刮削线程池。出网频率由 lib/rate_limiter 全局限速兜底，
+        # 并发数只决定流水线深度（详情解析/图片下载可重叠），不放大 QPS
         self.scrape_pool = QThreadPool()
-        self.scrape_pool.setMaxThreadCount(1)
+        self.scrape_pool.setMaxThreadCount(getattr(config, 'SCRAPE_CONCURRENCY', 3))
         
         # 存储所有正在排队或执行的任务文件：
         # {file_path: {"code": str, "row": int, "detail": dict, "status": str, "extra_files": list}}
@@ -990,16 +991,21 @@ class Controller:
             )
             if reply == QMessageBox.StandardButton.Yes:
                 todo_files = done_files
+                # 用户明确要求重新刮削：绕过磁盘缓存拿新数据
+                rescrape_confirmed = True
             else:
                 return
+        else:
+            rescrape_confirmed = False
 
         proxies = self.get_active_proxies()
         for fp in todo_files:
             info = self.task_files[fp]
             info["status"] = TS.SCRAPING
             self.view.table.setItem(info["row"], 3, QTableWidgetItem(TS.SCRAPING))
-            
-            worker = ScrapeWorker(fp, info["code"], output_dir, "javdb", proxies, only_scrape=True)
+
+            worker = ScrapeWorker(fp, info["code"], output_dir, "javdb", proxies, only_scrape=True,
+                                 force_refresh=rescrape_confirmed)
             self.start_worker(worker)
         self.save_backup()
         self.apply_task_filter()

@@ -82,6 +82,26 @@ class AdapterFactory:
         return cls.get_adapter(platform, existing_tags, **kwargs)
     
     @classmethod
+    def create_adapter(cls, platform_name: str, existing_tags: list = None, **kwargs) -> BaseAdapter:
+        """
+        创建全新适配器实例，不读写类级缓存。
+
+        供并发 worker 使用：共享缓存实例在多线程下会互相清除/共用 session，
+        每个工作线程持有独立实例才是安全的。
+        """
+        from .platform import get_platform_by_name
+
+        platform = get_platform_by_name(platform_name)
+        if not platform:
+            raise ValueError(f"未知的平台: {platform_name}")
+
+        adapter_class = cls._adapters.get(platform)
+        if not adapter_class:
+            raise ValueError(f"不支持的平台: {platform}")
+
+        return adapter_class(existing_tags=existing_tags, **kwargs)
+
+    @classmethod
     def register_adapter(cls, platform: Platform, adapter_class: type):
         """
         注册新的适配器

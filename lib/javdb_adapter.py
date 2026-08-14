@@ -74,7 +74,6 @@ class JavdbAdapter(BaseAdapter):
                 
                 if has_next and current_page < page + max_pages - 1:
                     current_page += 1
-                    time.sleep(0.5)  # 避免请求过快
                 else:
                     break
                 
@@ -222,9 +221,6 @@ class JavdbAdapter(BaseAdapter):
                 
                 has_next = result.get("has_next", False)
                 current_page += 1
-                
-                if has_next:
-                    time.sleep(0.5)
             
             return {
                 "page": page,
@@ -260,7 +256,6 @@ class JavdbAdapter(BaseAdapter):
                         full_works.append(work)
                 except Exception as e:
                     full_works.append(work)
-                time.sleep(0.5)
             
             result["works"] = full_works
             return result
@@ -302,9 +297,6 @@ class JavdbAdapter(BaseAdapter):
                 
                 has_next = result.get("has_next", False)
                 current_page += 1
-                
-                if has_next:
-                    time.sleep(0.5)
             
             return {
                 "page": page,
@@ -349,9 +341,6 @@ class JavdbAdapter(BaseAdapter):
                 
                 has_next = result.get("has_next", False)
                 current_page += 1
-                
-                if has_next:
-                    time.sleep(0.5)
             
             return {
                 "page": page,

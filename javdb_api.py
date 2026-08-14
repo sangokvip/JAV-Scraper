@@ -252,17 +252,23 @@ class JavdbAPI:
         url = self._get_full_url(path)
         kwargs.setdefault('timeout', config.JAVDB['timeout'])
         kwargs.setdefault('allow_redirects', True)
-        
+
+        from lib.rate_limiter import get_limiter
+        limiter = get_limiter('javdb', config.JAVDB.get('rate_limit_interval', 1.0))
+
         last_exception = None
         last_status = None
         # retry_times 表示"额外重试次数"；域名切换单独计数，不消耗重试额度
         max_attempts = config.JAVDB['retry_times'] + 1
         domain_count = max(len(config.JAVDB.get('domains') or []), 1)
         domain_switches = 0
+        backoff_base = config.JAVDB.get('sleep_time', 2)
 
         attempt = 0
         while attempt < max_attempts:
             try:
+                # 全局限速：无论多少并发 worker，对平台的请求节奏恒定
+                limiter.acquire()
                 with self._stats_lock:
                     self.request_count += 1
 
@@ -277,11 +283,27 @@ class JavdbAPI:
                     return response
 
                 last_status = response.status_code
+
+                # 429 限流：尊重服务端 Retry-After，不计入域名切换
+                if response.status_code == 429:
+                    retry_after = response.headers.get('Retry-After', '')
+                    try:
+                        wait = min(float(retry_after), 60.0) if retry_after else backoff_base * (2 ** attempt)
+                    except ValueError:
+                        wait = backoff_base * (2 ** attempt)
+                    attempt += 1
+                    if attempt < max_attempts:
+                        time.sleep(wait)
+                        continue
+                    break
+
                 if response.status_code in [403, 503] and domain_switches < domain_count - 1:
                     self._switch_domain()
                     url = self._get_full_url(path)
                     domain_switches += 1
-                    time.sleep(config.JAVDB.get('sleep_time', 2))
+                    # 域名切换后重载 cookie，避免登录态遗留在旧域
+                    self._load_cookies()
+                    time.sleep(backoff_base)
                     continue
 
                 response.raise_for_status()
@@ -290,7 +312,8 @@ class JavdbAPI:
                 last_exception = e
                 attempt += 1
                 if attempt < max_attempts:
-                    time.sleep(config.JAVDB.get('sleep_time', 2))
+                    # 指数退避：2s → 4s → 8s...，上限 30s
+                    time.sleep(min(backoff_base * (2 ** (attempt - 1)), 30))
 
         detail = last_exception if last_exception else f"HTTP {last_status}"
         raise Exception(f"请求失败: {detail}")
@@ -724,8 +747,6 @@ class JavdbAPI:
                 degraded = dict(work)
                 degraded['detail_error'] = str(e)
                 full_works.append(degraded)
-            if i < len(works) - 1:
-                time.sleep(config.JAVDB['sleep_time'])
         return full_works
 
     def get_actor_works_by_page(self, actor_id: str, page: int = 1) -> Dict:
@@ -822,7 +843,6 @@ class JavdbAPI:
             
             if has_next:
                 page += 1
-                time.sleep(config.JAVDB['sleep_time'])
         
         for i, work in enumerate(works, 1):
             work['rank'] = i
@@ -1097,7 +1117,6 @@ class JavdbAPI:
             
             if has_next:
                 page += 1
-                time.sleep(config.JAVDB['sleep_time'])
         
         for i, work in enumerate(works, 1):
             work['rank'] = i
@@ -1607,7 +1626,6 @@ class JavdbAPI:
             
             if has_next:
                 page += 1
-                time.sleep(config.JAVDB['sleep_time'])
         
         return works
     
@@ -1632,7 +1650,6 @@ class JavdbAPI:
             
             if has_next:
                 page += 1
-                time.sleep(config.JAVDB['sleep_time'])
         
         return works
     
@@ -1665,7 +1682,6 @@ class JavdbAPI:
             
             if has_next:
                 page += 1
-                time.sleep(config.JAVDB['sleep_time'])
         
         return {
             'list_id': list_id,

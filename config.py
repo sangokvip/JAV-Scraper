@@ -94,13 +94,20 @@ JAVDB = {
     'timeout': 8,
     # 重试次数
     'retry_times': 1,
-    # 请求间隔（秒）
+    # 请求间隔（秒）——仅用于重试退避基数
     'sleep_time': 2,
+    # 全局限速：任意线程对 JAVDB 的两次请求最小间隔（秒）。
+    # 并发 worker 共享此节奏，并发数不会放大出网 QPS
+    'rate_limit_interval': 1.0,
     # 每页作品数
     'page_size': 40,
     # 最大爬取页数
     'max_pages': 100,
 }
+
+# GUI 刮削线程池并发数。出网频率由 rate_limit_interval 全局限速兜底，
+# 提高并发不会成倍增加请求频率
+SCRAPE_CONCURRENCY = 3
 
 # 请求头配置
 HEADERS = {

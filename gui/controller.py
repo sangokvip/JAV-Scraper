@@ -520,8 +520,8 @@ class Controller:
             
             # 分类过滤匹配
             matches_filter = True
-            if filter_id == 1:    # 待整理
-                matches_filter = status in ("等待中", "已刮削(未整理)", "番号待补充")
+            if filter_id == 1:    # 待整理（已取消的任务可重跑，归入此类）
+                matches_filter = status in ("等待中", "已刮削(未整理)", "番号待补充", "已取消")
             elif filter_id == 2:  # 进行中
                 matches_filter = status in ("开始执行", "准备中") or status.startswith("正在") or status.endswith("中...")
             elif filter_id == 3:  # 已成功

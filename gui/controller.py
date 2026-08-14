@@ -23,6 +23,7 @@ from gui.widgets import (
     MultiCodeInputDialog
 )
 from gui.image_loader import ImageLoadWorker, SearchWorker
+from gui import task_status as TS
 
 # 导入公共辅助类
 from helpers.subtitle_helper import find_matching_subtitles
@@ -216,10 +217,10 @@ class Controller:
             code_item = QTableWidgetItem(info.get("code", ""))
             self.view.table.setItem(row, 2, code_item)
 
-            status_text = info.get("status", "等待中")
-            if status_text in ("开始执行", "准备中", "整理中...") or status_text.startswith("正在"):
-                status_text = "等待中"
-                info["status"] = "等待中"
+            status_text = info.get("status", TS.WAITING)
+            if TS.is_running(status_text):
+                status_text = TS.WAITING
+                info["status"] = TS.WAITING
             status_item = QTableWidgetItem(status_text)
             status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.view.table.setItem(row, 3, status_item)
@@ -268,7 +269,7 @@ class Controller:
 
         added_primary_files = []
         # 无输出路径时不会启动刮削，状态必须如实标"等待中"，否则任务卡死
-        initial_status = "正在刮削..." if self.view.path_input.text().strip() else "等待中"
+        initial_status = TS.SCRAPING if self.view.path_input.text().strip() else TS.WAITING
 
         # 1. 导入有号码的影片分组
         for code, file_list in grouped_files.items():
@@ -341,7 +342,7 @@ class Controller:
             code_item = QTableWidgetItem("")
             self.view.table.setItem(row, 2, code_item)
 
-            status_item = QTableWidgetItem("番号待补充")
+            status_item = QTableWidgetItem(TS.CODE_MISSING)
             status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.view.table.setItem(row, 3, status_item)
 
@@ -349,7 +350,7 @@ class Controller:
                 "code": "",
                 "row": row,
                 "detail": None,
-                "status": "番号待补充",
+                "status": TS.CODE_MISSING,
                 "extra_files": []
             }
 
@@ -394,7 +395,7 @@ class Controller:
             proxies = self.get_active_proxies()
             added_any = False
             first_row = None
-            initial_status = "正在刮削..." if output_dir else "等待中"
+            initial_status = TS.SCRAPING if output_dir else TS.WAITING
 
             for code in codes:
                 virtual_path = f"__virtual__:{code}"
@@ -471,7 +472,7 @@ class Controller:
             if target_fp and new_code:
                 info = self.task_files[target_fp]
                 output_dir = self.view.path_input.text().strip()
-                new_status = "正在刮削..." if output_dir else "等待中"
+                new_status = TS.SCRAPING if output_dir else TS.WAITING
                 info["status"] = new_status
 
                 status_item = self.view.table.item(row, 3)
@@ -486,10 +487,10 @@ class Controller:
                     self.start_worker(worker)
             elif target_fp:
                 info = self.task_files[target_fp]
-                info["status"] = "番号待补充"
+                info["status"] = TS.CODE_MISSING
                 status_item = self.view.table.item(row, 3)
                 if status_item:
-                    status_item.setText("番号待补充")
+                    status_item.setText(TS.CODE_MISSING)
                 self.save_backup()
             self.apply_task_filter()
 
@@ -521,13 +522,13 @@ class Controller:
             # 分类过滤匹配
             matches_filter = True
             if filter_id == 1:    # 待整理（已取消的任务可重跑，归入此类）
-                matches_filter = status in ("等待中", "已刮削(未整理)", "番号待补充", "已取消")
+                matches_filter = status in TS.PENDING_STATES
             elif filter_id == 2:  # 进行中
-                matches_filter = status in ("开始执行", "准备中") or status.startswith("正在") or status.endswith("中...")
+                matches_filter = TS.is_running(status)
             elif filter_id == 3:  # 已成功
-                matches_filter = status == "已整理成功"
+                matches_filter = TS.is_success(status)
             elif filter_id == 4:  # 失败项
-                matches_filter = "失败" in status or "异常" in status or status.startswith("❌")
+                matches_filter = TS.is_failed(status)
                 
             is_visible = matches_search and matches_filter
             self.view.table.setRowHidden(row, not is_visible)
@@ -738,7 +739,7 @@ class Controller:
             action_organize = menu.addAction("仅整理此影片")
             # 引入直接播放
             filepath = selected_fps[0]
-            is_organized = self.task_files[filepath]["status"] == "已整理成功"
+            is_organized = TS.is_success(self.task_files[filepath]["status"])
             
             action_play = menu.addAction("播放归档影片")
             action_open = menu.addAction("在 Finder 中打开文件夹")
@@ -749,7 +750,7 @@ class Controller:
             action_remove = menu.addAction("从列表中移除")
             
         any_has_code = any(self.task_files[fp]["code"] for fp in selected_fps)
-        any_running = any(self.task_files[fp]["status"] in ["正在刮削...", "整理中..."] for fp in selected_fps)
+        any_running = any(TS.is_running(self.task_files[fp]["status"]) for fp in selected_fps)
         
         if not any_has_code or any_running:
             action_scrape.setEnabled(False)
@@ -822,11 +823,11 @@ class Controller:
         
         for fp in file_paths:
             info = self.task_files.get(fp)
-            if not info or not info["code"] or info["status"] in ["正在刮削...", "整理中..."]:
+            if not info or not info["code"] or TS.is_running(info["status"]):
                 continue
-                
-            info["status"] = "正在刮削..."
-            self.view.table.setItem(info["row"], 3, QTableWidgetItem("正在刮削..."))
+
+            info["status"] = TS.SCRAPING
+            self.view.table.setItem(info["row"], 3, QTableWidgetItem(TS.SCRAPING))
             
             worker = ScrapeWorker(fp, info["code"], output_dir, "javdb", proxies, only_scrape=True)
             self.start_worker(worker)
@@ -842,7 +843,7 @@ class Controller:
         todo_files = []
         for fp in file_paths:
             info = self.task_files.get(fp)
-            if not info or not info["code"] or info["status"] == "整理中...":
+            if not info or not info["code"] or info["status"] == TS.ORGANIZING:
                 continue
             todo_files.append(fp)
             
@@ -861,8 +862,8 @@ class Controller:
         
         for fp in todo_files:
             info = self.task_files.get(fp)
-            info["status"] = "整理中..."
-            self.view.table.setItem(info["row"], 3, QTableWidgetItem("整理中..."))
+            info["status"] = TS.ORGANIZING
+            self.view.table.setItem(info["row"], 3, QTableWidgetItem(TS.ORGANIZING))
             
             worker = ScrapeWorker(fp, info["code"], output_dir, "javdb", proxies, only_scrape=False, 
                                  cached_detail=info["detail"], extra_files=info.get("extra_files", []),
@@ -969,9 +970,9 @@ class Controller:
         for fp, info in self.task_files.items():
             if not info["code"]:
                 continue
-            if info["status"] in ["正在刮削...", "整理中..."]:
+            if TS.is_running(info["status"]):
                 continue
-            if info["status"] in ["已刮削(未整理)", "已整理成功"]:
+            if info["status"] in (TS.SCRAPED, TS.ORGANIZED):
                 done_files.append(fp)
             else:
                 todo_files.append(fp)
@@ -995,8 +996,8 @@ class Controller:
         proxies = self.get_active_proxies()
         for fp in todo_files:
             info = self.task_files[fp]
-            info["status"] = "正在刮削..."
-            self.view.table.setItem(info["row"], 3, QTableWidgetItem("正在刮削..."))
+            info["status"] = TS.SCRAPING
+            self.view.table.setItem(info["row"], 3, QTableWidgetItem(TS.SCRAPING))
             
             worker = ScrapeWorker(fp, info["code"], output_dir, "javdb", proxies, only_scrape=True)
             self.start_worker(worker)
@@ -1018,9 +1019,9 @@ class Controller:
         for fp, info in self.task_files.items():
             if not info["code"]:
                 continue
-            if info["status"] == "整理中...":
+            if info["status"] == TS.ORGANIZING:
                 continue
-            if info["status"] == "已整理成功":
+            if TS.is_success(info["status"]):
                 done_files.append(fp)
             else:
                 todo_files.append(fp)
@@ -1053,8 +1054,8 @@ class Controller:
 
         for fp in todo_files:
             info = self.task_files[fp]
-            info["status"] = "整理中..."
-            self.view.table.setItem(info["row"], 3, QTableWidgetItem("整理中..."))
+            info["status"] = TS.ORGANIZING
+            self.view.table.setItem(info["row"], 3, QTableWidgetItem(TS.ORGANIZING))
 
             worker = ScrapeWorker(fp, info["code"], output_dir, "javdb", proxies, only_scrape=False, 
                                  cached_detail=info["detail"], extra_files=info.get("extra_files", []),
@@ -1078,10 +1079,10 @@ class Controller:
         row = info.get("row", -1)
         if row < 0 or row >= self.view.table.rowCount():
             return
-        info["status"] = "开始执行"
+        info["status"] = TS.STARTED
         try:
             self.view.table.removeCellWidget(row, 3)
-            self.view.table.setItem(row, 3, QTableWidgetItem("开始执行"))
+            self.view.table.setItem(row, 3, QTableWidgetItem(TS.STARTED))
             self.save_backup()
             self.apply_task_filter()
         except Exception as e:
@@ -1091,7 +1092,9 @@ class Controller:
         if filepath not in self.task_files:
             return
         info = self.task_files[filepath]
-        info["status"] = message
+        # 进度文案只进 progress_text，绝不覆盖 status——
+        # 覆盖会让状态集合变成开放的自由文本，破坏过滤与恢复逻辑
+        info["progress_text"] = message
         row = info.get("row", -1)
         if row < 0 or row >= self.view.table.rowCount():
             return
@@ -1176,9 +1179,10 @@ class Controller:
         if 0 <= row < self.view.table.rowCount():
             try:
                 self.view.table.removeCellWidget(row, 3)
+                info.pop("progress_text", None)
                 if status == "success":
-                    info["status"] = "已整理成功"
-                    self.view.table.setItem(row, 3, QTableWidgetItem("✅ 已整理成功"))
+                    info["status"] = TS.ORGANIZED
+                    self.view.table.setItem(row, 3, QTableWidgetItem(TS.display_text(TS.ORGANIZED)))
                     
                     selected_ranges = self.view.table.selectedRanges()
                     if selected_ranges and selected_ranges[0].topRow() == row:
@@ -1192,19 +1196,19 @@ class Controller:
                         for extra_f in info.get("extra_files", []):
                             self.processed_parent_dirs.add(os.path.dirname(extra_f))
                 elif status == "scrape_success":
-                    info["status"] = "已刮削(未整理)"
-                    self.view.table.setItem(row, 3, QTableWidgetItem("已刮削(未整理)"))
+                    info["status"] = TS.SCRAPED
+                    self.view.table.setItem(row, 3, QTableWidgetItem(TS.SCRAPED))
                     
                     selected_ranges = self.view.table.selectedRanges()
                     if selected_ranges and selected_ranges[0].topRow() == row:
                         detail = info["detail"]
                         self.show_preview_details(detail, filepath, loaded_local=False)
                 elif status == "cancelled":
-                    info["status"] = "已取消"
-                    self.view.table.setItem(row, 3, QTableWidgetItem("已取消"))
+                    info["status"] = TS.CANCELLED
+                    self.view.table.setItem(row, 3, QTableWidgetItem(TS.CANCELLED))
                 else:
-                    info["status"] = f"失败: {status}"
-                    self.view.table.setItem(row, 3, QTableWidgetItem(f"❌ 失败: {status}"))
+                    info["status"] = TS.failed(status)
+                    self.view.table.setItem(row, 3, QTableWidgetItem(TS.display_text(info["status"])))
                 
                 self.save_backup()
                 self.apply_task_filter()
@@ -1214,8 +1218,7 @@ class Controller:
         # 检查是否所有正在执行的任务都已执行完毕
         all_done = True
         for fp, t_info in self.task_files.items():
-            s = t_info.get("status", "")
-            if s in ("开始执行", "准备中", "整理中...") or s.startswith("正在"):
+            if TS.is_running(t_info.get("status", "")):
                 all_done = False
                 break
 
@@ -1266,7 +1269,7 @@ class Controller:
 
         detail = info["detail"]
         if detail:
-            is_success = info["status"] == "已整理成功"
+            is_success = TS.is_success(info["status"])
             self.show_preview_details(detail, filepath, loaded_local=is_success)
         else:
             self.reset_preview_panel()
@@ -1642,12 +1645,12 @@ class Controller:
         organize_fps = []
         for fp, info in self.task_files.items():
             status = info.get("status", "")
-            if "失败" in status or "异常" in status or status.startswith("❌"):
-                info["status"] = "等待中"
+            if TS.is_failed(status):
+                info["status"] = TS.WAITING
                 row = info["row"]
                 status_item = self.view.table.item(row, 3)
                 if status_item:
-                    status_item.setText("等待中")
+                    status_item.setText(TS.WAITING)
                 (organize_fps if info.get("detail") else scrape_fps).append(fp)
 
         if not scrape_fps and not organize_fps:

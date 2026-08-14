@@ -2,6 +2,7 @@ import os
 import json
 
 from config import PROJECT_ROOT
+from gui import task_status
 
 DEFAULT_BACKUP_PATH = os.path.abspath(
     os.path.join(PROJECT_ROOT, "tasks_backup.json")
@@ -55,7 +56,7 @@ def save_tasks_backup(task_files: dict, filepath: str = DEFAULT_BACKUP_PATH):
             serializable_tasks[fp] = {
                 "code": info.get("code", ""),
                 "row": info.get("row", 0),
-                "status": info.get("status", "等待中"),
+                "status": info.get("status", task_status.WAITING),
                 "detail": info.get("detail"),
                 "extra_files": info.get("extra_files", [])
             }
@@ -87,7 +88,7 @@ def load_tasks_backup(filepath: str = DEFAULT_BACKUP_PATH) -> dict:
                 restored_tasks[fp] = {
                     "code": info.get("code", ""),
                     "row": info.get("row", 0),
-                    "status": info.get("status", "等待中"),
+                    "status": info.get("status", task_status.WAITING),
                     "detail": info.get("detail"),
                     "extra_files": info.get("extra_files", [])
                 }

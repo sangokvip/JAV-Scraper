@@ -1,5 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
+import re
 from PyInstaller.utils.hooks import collect_all
+
+# 版本号唯一来源是 config.APP_VERSION；用正则读避免 import config 的建目录副作用
+APP_VERSION = re.search(
+    r"APP_VERSION\s*=\s*['\"]([^'\"]+)['\"]",
+    open('config.py', encoding='utf-8').read()
+).group(1)
 
 datas = [('third_party_config.json', '.'), ('cookies.json', '.'), ('lib', 'lib'), ('gui', 'gui')]
 binaries = []
@@ -58,6 +65,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleDisplayName': 'JAV SCRAPER',
         'CFBundleName': 'JAV SCRAPER',
+        'CFBundleShortVersionString': APP_VERSION,
+        'CFBundleVersion': APP_VERSION,
         'NSRequiresAquaSystemAppearance': 'No',
         'NSDocumentsFolderUsageDescription': '需要访问文档文件夹以整理视频',
         'NSDownloadsFolderUsageDescription': '需要访问下载文件夹以整理视频',

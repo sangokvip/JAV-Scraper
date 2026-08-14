@@ -9,13 +9,14 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPixmap, QIcon
 from gui.widgets import TaskTableWidget, ClickableDropLabel
 from gui.styles import STYLE_SHEET
+import config
 
 class MainWindow(QMainWindow):
     files_dropped = Signal(list)  # 拖入的文件路径列表
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("JAV SCRAPER")
+        self.setWindowTitle(f"JAV SCRAPER v{config.APP_VERSION}")
         
         icon_path = os.path.join(os.path.dirname(__file__), "icon.png")
         if os.path.exists(icon_path):

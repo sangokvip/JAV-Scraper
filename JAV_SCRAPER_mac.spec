@@ -8,9 +8,10 @@ APP_VERSION = re.search(
     open('config.py', encoding='utf-8').read()
 ).group(1)
 
-datas = [('third_party_config.json', '.'), ('cookies.json', '.'), ('lib', 'lib'), ('gui', 'gui')]
+datas = [('third_party_config.json', '.'), ('cookies.json', '.'), ('lib', 'lib'), ('gui', 'gui'), ('player', 'player')]
 binaries = []
-hiddenimports = []
+# flask 由 player_service 动态加载（importlib），静态分析发现不了，必须显式声明
+hiddenimports = ['flask']
 tmp_ret = collect_all('curl_cffi')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 

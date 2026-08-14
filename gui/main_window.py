@@ -16,6 +16,8 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        # Controller 注入：返回 False 时取消关闭（如任务进行中需二次确认）
+        self.confirm_close_callback = None
         self.setWindowTitle(f"JAV SCRAPER v{config.APP_VERSION}")
         
         icon_path = os.path.join(os.path.dirname(__file__), "icon.png")
@@ -328,11 +330,14 @@ class MainWindow(QMainWindow):
         self.btn_import_dir.setObjectName("ImportDirBtn")
         self.btn_add_code = QPushButton("手动输入番号...")
         self.btn_add_code.setObjectName("AddCodeBtn")
+        self.btn_settings = QPushButton("⚙ 设置")
+        self.btn_settings.setObjectName("SettingsBtn")
         btn_row1_layout.addWidget(self.btn_clear)
         btn_row1_layout.addWidget(self.btn_remove_selected)
         btn_row1_layout.addWidget(self.btn_retry_failed)
         btn_row1_layout.addWidget(self.btn_import_dir)
         btn_row1_layout.addWidget(self.btn_add_code)
+        btn_row1_layout.addWidget(self.btn_settings)
         btn_control_layout.addLayout(btn_row1_layout)
 
         # 按钮行 2：仅刮削与整理动作
@@ -504,3 +509,10 @@ class MainWindow(QMainWindow):
             
         preview = re.sub(r'\{([^{}]+)\}', replace_placeholder, tmpl)
         self.lbl_tmpl_example.setText(f"预览: {preview}")
+
+    def closeEvent(self, event):
+        cb = self.confirm_close_callback
+        if cb and not cb():
+            event.ignore()
+            return
+        super().closeEvent(event)

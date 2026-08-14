@@ -8,6 +8,7 @@ import requests
 from PySide6.QtCore import QRunnable, QObject, Signal
 from lib import AdapterFactory
 from lib import detail_cache
+from lib import undo_journal
 from helpers.subtitle_helper import find_matching_subtitles, move_and_rename_subtitles
 from helpers.template_helper import format_target_path
 from lib.logger import get_logger
@@ -190,6 +191,7 @@ class ScrapeWorker(QRunnable):
 
                 # 3. 处理字幕和重命名整理
                 has_subtitle_file = False
+                journal_moves = []  # [(原路径, 新路径)]，供撤销整理回放
                 video_files = []
                 if not self.file_path.startswith("__virtual__:"):
                     video_files = [self.file_path] + self.extra_files
@@ -264,10 +266,12 @@ class ScrapeWorker(QRunnable):
                                     os.remove(v_path)
                                 except Exception as move_err:
                                     raise OSError(move_err.errno if hasattr(move_err, 'errno') else 1, f"移动视频失败: {move_err}")
-                        
+                            journal_moves.append((v_path, target_video_path))
+
                         # 同步移动外挂字幕
                         if subs:
-                            move_and_rename_subtitles(v_path, target_video_path, subs)
+                            journal_moves.extend(
+                                move_and_rename_subtitles(v_path, target_video_path, subs))
 
                 # 4. 写入元数据 NFO
                 if self.is_cancelled:
@@ -380,6 +384,14 @@ class ScrapeWorker(QRunnable):
                 if self.is_cancelled:
                     self.signals.finished.emit(self.file_path, "cancelled")
                     return
+
+                # 记录撤销日志（虚拟任务无文件移动也记录，撤销时只清元数据）
+                undo_journal.save(self.code, {
+                    "code": self.code,
+                    "file_path": self.file_path,
+                    "target_folder": target_folder,
+                    "moves": [list(m) for m in journal_moves],
+                })
 
                 self.signals.finished.emit(self.file_path, "success")
 

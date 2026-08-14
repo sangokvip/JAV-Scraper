@@ -1,7 +1,9 @@
 import os
 import json
+import shutil
 import requests
 import config
+from lib import undo_journal
 from collections import OrderedDict
 from PySide6.QtCore import QThreadPool, Qt, Signal, QRunnable, QObject, QTimer
 from PySide6.QtWidgets import (
@@ -116,6 +118,8 @@ class Controller:
         self.view.drop_label.clicked.connect(self.import_files_manually)
         self.view.btn_import_dir.clicked.connect(self.import_dir_manually)
         self.view.btn_add_code.clicked.connect(self.add_code_manually)
+        self.view.btn_settings.clicked.connect(self.open_settings_dialog)
+        self.view.confirm_close_callback = self._confirm_close
         self.view.btn_start.clicked.connect(self.start_scraping)
         self.view.btn_organize.clicked.connect(self.start_organizing)
         self.view.btn_test_proxy.clicked.connect(self.test_proxy_connection)
@@ -566,10 +570,36 @@ class Controller:
             "custom_proxy": self.view.chk_custom_proxy.isChecked(),
             "proxy_url": self.view.proxy_input.text().strip()
         }
+        settings.update(self.app_settings)
         save_settings_backup(settings)
+
+    def open_settings_dialog(self):
+        from gui.settings_dialog import SettingsDialog
+        dialog = SettingsDialog(self.view, self.app_settings)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.app_settings.update(dialog.values())
+            self._apply_app_settings()
+            self._do_save_settings()
+
+    def _apply_app_settings(self):
+        """把面板设置应用到运行时（并发池 / 全局限速器）"""
+        concurrency = int(self.app_settings.get("scrape_concurrency", 3))
+        self.scrape_pool.setMaxThreadCount(max(1, min(concurrency, 8)))
+
+        interval = float(self.app_settings.get("rate_limit_interval", 1.0))
+        config.JAVDB['rate_limit_interval'] = interval
+        from lib.rate_limiter import get_limiter
+        get_limiter('javdb', interval).min_interval = interval
 
     def load_settings(self):
         settings = load_settings_backup()
+        # 设置面板项（独立于主窗口输入框的运行时配置）
+        self.app_settings = {
+            "scrape_concurrency": settings.get("scrape_concurrency", 3),
+            "rate_limit_interval": settings.get("rate_limit_interval", 1.0),
+            "custom_player_path": settings.get("custom_player_path", ""),
+        }
+        self._apply_app_settings()
         self.view.path_input.blockSignals(True)
         self.view.path_input.setText(settings.get("output_dir", str(config.OUTPUT_DIR['root'])))
         self.view.path_input.setCursorPosition(0)
@@ -585,6 +615,19 @@ class Controller:
             proxy = self.view.proxy_input.text().strip()
             return {"http": proxy, "https": proxy} if proxy else None
         return None
+
+    def _confirm_close(self) -> bool:
+        """窗口关闭前拦截：任务进行中需用户二次确认。"""
+        running = sum(1 for info in self.task_files.values()
+                      if TS.is_running(info.get("status", "")))
+        if not running:
+            return True
+        reply = QMessageBox.question(
+            self.view, "任务进行中",
+            f"仍有 {running} 个任务正在执行，强行退出可能留下未完成的文件。\n确定退出吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        return reply == QMessageBox.StandardButton.Yes
 
     def _fp_by_row(self, row):
         """按表格行号反查任务 filepath，找不到返回 None"""
@@ -749,7 +792,14 @@ class Controller:
             action_open = menu.addAction("在 Finder 中打开文件夹")
             action_play.setEnabled(is_organized)
             action_open.setEnabled(is_organized)
-            
+
+            action_undo = menu.addAction("撤销整理 (移回原位置)")
+            action_undo.setEnabled(
+                is_organized and undo_journal.load(self.task_files[filepath]["code"]) is not None)
+
+            action_online = menu.addAction("在线试看 (流媒体)")
+            action_online.setEnabled(bool(self.task_files[filepath]["code"]))
+
             menu.addSeparator()
             action_remove = menu.addAction("从列表中移除")
             
@@ -773,11 +823,108 @@ class Controller:
             self.play_task_video(selected_fps[0])
         elif count == 1 and selected_action == action_open:
             self.open_task_folder(selected_fps[0])
+        elif count == 1 and selected_action == action_undo:
+            self.undo_organize(selected_fps[0])
+        elif count == 1 and selected_action == action_online:
+            self.open_online_preview(selected_fps[0])
+
+    def open_online_preview(self, filepath):
+        """启动本地播放服务并在浏览器打开在线试看页（自动填入番号）。"""
+        info = self.task_files.get(filepath)
+        if not info or not info["code"]:
+            return
+        try:
+            from gui.player_service import ensure_server
+            proxy_url = None
+            if self.view.chk_custom_proxy.isChecked():
+                proxy_url = self.view.proxy_input.text().strip() or None
+            port = ensure_server(proxy_url)
+        except Exception as e:
+            QMessageBox.warning(
+                self.view, "在线试看不可用",
+                f"本地播放服务启动失败：{e}\n\n源码运行请先安装 flask：pip install flask")
+            return
+        import webbrowser
+        webbrowser.open(f"http://127.0.0.1:{port}/?code={info['code']}")
+
+    def undo_organize(self, filepath):
+        """按整理日志回滚：文件移回原位置，删除生成的元数据，状态退回已刮削。"""
+        info = self.task_files.get(filepath)
+        if not info or not info["code"]:
+            return
+        journal = undo_journal.load(info["code"])
+        if not journal:
+            QMessageBox.information(self.view, "提示", "没有该影片的整理日志，无法撤销。")
+            return
+
+        moves = journal.get("moves", [])
+        target_folder = journal.get("target_folder", "")
+        reply = QMessageBox.question(
+            self.view, "撤销整理",
+            f"将把 {len(moves)} 个文件移回整理前的位置，并删除生成的 NFO/封面/剧照。\n"
+            f"归档目录：{target_folder}\n确定撤销吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        errors = []
+        # 1. 文件移回原位置（倒序回放）
+        for src, dst in reversed(moves):
+            try:
+                if not os.path.exists(dst):
+                    continue  # 归档后被外部移动/删除，跳过
+                if os.path.exists(src):
+                    errors.append(f"原位置已被占用: {src}")
+                    continue
+                os.makedirs(os.path.dirname(src), exist_ok=True)
+                shutil.move(dst, src)
+            except Exception as e:
+                errors.append(f"{os.path.basename(dst)}: {e}")
+
+        # 2. 删除本工具生成的元数据（只删已知产物，不碰其他文件）
+        if target_folder and os.path.isdir(target_folder):
+            for name in (f"{info['code']}.nfo", "poster.jpg", "fanart.jpg"):
+                try:
+                    p = os.path.join(target_folder, name)
+                    if os.path.exists(p):
+                        os.remove(p)
+                except Exception:
+                    pass
+            extrafanart = os.path.join(target_folder, "extrafanart")
+            if os.path.isdir(extrafanart):
+                try:
+                    for f in os.listdir(extrafanart):
+                        if f.startswith("fanart") and f.endswith(".jpg"):
+                            os.remove(os.path.join(extrafanart, f))
+                    os.rmdir(extrafanart)  # 非空自动失败，不误删
+                except OSError:
+                    pass
+            # 3. 归档目录与演员父目录若已空则移除
+            try:
+                os.rmdir(target_folder)
+                parent = os.path.dirname(target_folder)
+                output_dir = self.view.path_input.text().strip()
+                if parent and os.path.abspath(parent) != os.path.abspath(output_dir):
+                    os.rmdir(parent)
+            except OSError:
+                pass
+
+        undo_journal.delete(info["code"])
+        info["status"] = TS.SCRAPED
+        row = info.get("row", -1)
+        if 0 <= row < self.view.table.rowCount():
+            self.view.table.setItem(row, 3, QTableWidgetItem(TS.SCRAPED))
+        self.save_backup()
+        self.apply_task_filter()
+
+        if errors:
+            QMessageBox.warning(self.view, "撤销完成（部分失败）", "\n".join(errors[:10]))
 
     def play_task_video(self, filepath):
         video_path = self.get_organized_video_path(filepath)
         if video_path and os.path.exists(video_path):
-            play_video(video_path)
+            play_video(video_path, self.app_settings.get("custom_player_path", ""))
         else:
             QMessageBox.warning(self.view, "提示", "找不到对应的本地已归档视频文件。")
 

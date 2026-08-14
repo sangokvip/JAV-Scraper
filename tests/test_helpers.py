@@ -135,3 +135,33 @@ def test_nfo_optional_fields_absent(tmp_path):
     assert "<trailer>" not in content
     assert "<year>" not in content
     assert 'type="javdb"' not in content
+
+
+# ---------- undo_journal ----------
+
+def test_undo_journal_roundtrip(monkeypatch, tmp_path):
+    from lib import undo_journal
+    monkeypatch.setattr(undo_journal, "JOURNAL_DIR", tmp_path)
+    record = {"code": "ABC-123", "target_folder": "/x/y",
+              "moves": [["/a/v.mp4", "/x/y/ABC-123.mp4"]]}
+    undo_journal.save("ABC-123", record)
+    loaded = undo_journal.load("ABC-123")
+    assert loaded["moves"] == record["moves"]
+    assert "saved_at" in loaded
+    undo_journal.delete("ABC-123")
+    assert undo_journal.load("ABC-123") is None
+
+
+# ---------- subtitle move pairs ----------
+
+def test_subtitle_move_returns_pairs(tmp_path):
+    from helpers.subtitle_helper import find_matching_subtitles, move_and_rename_subtitles
+    src_dir = tmp_path / "src"; src_dir.mkdir()
+    dst_dir = tmp_path / "dst"; dst_dir.mkdir()
+    video = src_dir / "ABC-123.mp4"; video.write_bytes(b"v")
+    sub = src_dir / "ABC-123.zh-CN.srt"; sub.write_text("s")
+    subs = find_matching_subtitles(str(video))
+    assert subs == [str(sub)]
+    moved = move_and_rename_subtitles(str(video), str(dst_dir / "ABC-123.mp4"), subs)
+    assert moved == [(str(sub), str(dst_dir / "ABC-123.zh-CN.srt"))]
+    assert (dst_dir / "ABC-123.zh-CN.srt").exists()

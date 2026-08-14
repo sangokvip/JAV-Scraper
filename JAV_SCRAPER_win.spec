@@ -1,9 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('third_party_config.json', '.'), ('cookies.json', '.'), ('lib', 'lib'), ('gui', 'gui')]
+datas = [('third_party_config.json', '.'), ('cookies.json', '.'), ('lib', 'lib'), ('gui', 'gui'), ('player', 'player')]
 binaries = []
-hiddenimports = ['PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtWidgets', 'PySide6.QtNetwork', 'lxml.etree', 'lxml._elementpath', 'bs4', 'yaml']
+hiddenimports = ['PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtWidgets', 'PySide6.QtNetwork', 'lxml.etree', 'lxml._elementpath', 'bs4', 'yaml', 'flask']
 tmp_ret = collect_all('curl_cffi')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('PySide6')

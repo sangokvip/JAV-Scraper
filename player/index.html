@@ -559,6 +559,15 @@
                 playVideo(stream.proxy_url);
             }
         }
+
+        // GUI 集成：带 ?code=XXX 打开时自动填入番号并开始搜索
+        (function () {
+            const code = new URLSearchParams(location.search).get('code');
+            if (code) {
+                document.getElementById('avidInput').value = code;
+                search();
+            }
+        })();
     </script>
 </body>
 </html>

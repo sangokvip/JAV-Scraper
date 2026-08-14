@@ -43,6 +43,7 @@ def find_matching_subtitles(video_path: str) -> list:
 def move_and_rename_subtitles(video_path: str, target_video_path: str, subtitles: list) -> list:
     """
     将匹配的外挂字幕同步移动并命名到与新视频文件对应的名称和目录下，保留字幕的语言后缀。
+    返回 [(原路径, 新路径), ...]，供整理撤销日志记账。
     """
     moved_subs = []
     video_base_old, _ = os.path.splitext(os.path.basename(video_path))
@@ -71,13 +72,13 @@ def move_and_rename_subtitles(video_path: str, target_video_path: str, subtitles
                 continue
             try:
                 os.rename(sub_path, target_sub_path)
-                moved_subs.append(target_sub_path)
+                moved_subs.append((sub_path, target_sub_path))
             except Exception:
                 try:
                     # 降级方案
                     shutil.copyfile(sub_path, target_sub_path)
                     os.remove(sub_path)
-                    moved_subs.append(target_sub_path)
+                    moved_subs.append((sub_path, target_sub_path))
                 except Exception as e:
                     log.error(f"字幕文件移动重命名失败 {sub_path} -> {target_sub_path}: {e}")
                     

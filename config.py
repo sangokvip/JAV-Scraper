@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 # 应用版本（窗口标题、macOS bundle、发布 tag 的单一来源）
-APP_VERSION = "2.3.0"
+APP_VERSION = "2.3.1"
 
 # ============================================================================
 # 路径分层体系 (适配 PyInstaller 打包与开发态)

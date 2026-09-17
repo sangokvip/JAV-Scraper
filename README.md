@@ -124,7 +124,7 @@ python3 main.py
 * 在 GitHub 的 **Actions → Build Windows → Run workflow** 手动触发，构建完成后在该次运行的 **Artifacts** 里下载 zip；
 * 或推送版本 tag 自动发布到 Releases：
   ```bash
-  git tag v2.3.0 && git push origin v2.3.0
+  git tag v2.3.1 && git push origin v2.3.1
   ```
 流程会先在 Windows 上跑一遍单元测试，再用 PyInstaller 打包、冒烟启动 exe 并压缩成 `JAV_SCRAPER_v<版本>_windows_x64.zip`。
 

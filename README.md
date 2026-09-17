@@ -58,7 +58,7 @@
 
 ### 2. macOS 独立运行版 (免安装 DMG)
 * **适用平台**：Apple Silicon / Intel macOS 12+
-* **运行方式**：双击直接打开内置的一键 DMG 磁盘映像文件安装，拖入“应用程序”文件夹即可使用。
+* **获取方式**：到 [Releases](https://github.com/sangokvip/JAV-Scraper/releases) 下载对应芯片的 DMG：Apple Silicon 选 `_macOS_arm64.dmg`，Intel 选 `_macOS_x86_64.dmg`。双击打开后拖入“应用程序”文件夹即可使用。
 * **特点**：**无需配置 Python 环境，零依赖，双击即用**。已在打包中配置了 CFBundle 描述信息，完美适配 macOS 隐私权限管理（支持文档、下载、桌面、网络共享卷/NAS 和移动硬盘的物理访问）。
 
 ### 3. Windows 独立运行版 (.exe，免安装绿色版)
@@ -103,7 +103,24 @@ python3 main.py
 
 ## 📦 编译与打包
 
-### macOS 平台打包 (生成 DMG)
+### 云端自动构建（推荐，三平台一次出包）
+
+仓库内置 [`.github/workflows/build.yml`](.github/workflows/build.yml)，会并行产出：
+
+| 产物 | 运行器 |
+|---|---|
+| `JAV_SCRAPER_v<版本>_windows_x64.zip` | windows-latest |
+| `JAV_SCRAPER_v<版本>_macOS_arm64.dmg`（Apple Silicon） | macos-15 |
+| `JAV_SCRAPER_v<版本>_macOS_x86_64.dmg`（Intel） | macos-15-intel |
+
+每个平台都会先跑单元测试，再打包并冒烟启动一次。触发方式：
+* **发版**：修改 `config.py` 里的 `APP_VERSION` 后推送 tag，三个包全部成功后自动创建 Release 并附上：
+  ```bash
+  git tag v2.3.1 && git push origin v2.3.1
+  ```
+* **试构建**：GitHub 的 **Actions → Build → Run workflow**，产物在该次运行的 **Artifacts** 里；Pull Request 也会自动构建。
+
+### macOS 本机打包 (生成 DMG)
 在 macOS 本地终端运行以下命令：
 1. **编译应用**：
    ```bash
@@ -114,22 +131,9 @@ python3 main.py
    ```bash
    bash build_dmg.sh
    ```
-   打包成功后，可在 **`dist/`** 目录下获取 **`JAV_SCRAPER_macOS.dmg`** 映像文件。
+   打包成功后，可在 **`dist/`** 目录下获取 **`JAV_SCRAPER_macOS.dmg`** 映像文件（可用环境变量 `DMG_NAME` 改名）。本机只能打出当前 CPU 架构的包。
 
-### Windows 平台打包
-
-**方式一：GitHub Actions 云端构建（推荐，不需要 Windows 电脑）**
-
-仓库内置 [`.github/workflows/build-windows.yml`](.github/workflows/build-windows.yml)：
-* 在 GitHub 的 **Actions → Build Windows → Run workflow** 手动触发，构建完成后在该次运行的 **Artifacts** 里下载 zip；
-* 或推送版本 tag 自动发布到 Releases：
-  ```bash
-  git tag v2.3.1 && git push origin v2.3.1
-  ```
-流程会先在 Windows 上跑一遍单元测试，再用 PyInstaller 打包、冒烟启动 exe 并压缩成 `JAV_SCRAPER_v<版本>_windows_x64.zip`。
-
-**方式二：本机打包**
-
+### Windows 本机打包
 在 Windows 上安装 Python 3.10 ~ 3.12（64 位，勾选 Add to PATH）后，双击或在终端运行：
 ```bat
 build_win.bat

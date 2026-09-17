@@ -3,7 +3,8 @@
 set -e
 
 APP_NAME="JAV SCRAPER"
-DMG_NAME="JAV_SCRAPER_macOS.dmg"
+# 可用环境变量覆盖输出文件名（CI 按架构命名：JAV_SCRAPER_v2.3.1_macOS_arm64.dmg）
+DMG_NAME="${DMG_NAME:-JAV_SCRAPER_macOS.dmg}"
 DIST_DIR="dist"
 TEMP_DIR="dmg_temp"
 

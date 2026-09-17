@@ -1,0 +1,155 @@
+name: Build
+
+# 触发方式：
+#   1. 手动：Actions 页面 → Build → Run workflow（产物在本次运行的 Artifacts 里）
+#   2. 打 tag：git tag v2.3.1 && git push origin v2.3.1 → 三个平台包全部构建完成后统一创建 GitHub Release
+#   3. Pull Request：合并前先在 Windows / macOS 上验证测试与打包
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: ver
+        run: |
+          VER=$(python3 -c "import re;print(re.search(r'APP_VERSION\s*=\s*.([0-9.]+)',open('config.py',encoding='utf-8').read()).group(1))")
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "APP_VERSION=$VER"
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    env:
+      ZIP: JAV_SCRAPER_v${{ needs.version.outputs.version }}_windows_x64.zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install "pyinstaller>=6.0" pytest
+
+      # 单元测试在 Windows 上跑一遍：路径分隔符 / 非法字符 / 原子写等平台差异先于打包暴露
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+      - name: Generate icons and placeholder configs
+        shell: bash
+        run: |
+          python convert_icon.py
+          [ -f cookies.json ] || echo '{}' > cookies.json
+          [ -f third_party_config.json ] || echo '{"default_adapter": "javdb", "adapters": {"javdb": {"enabled": true, "domain_index": 0}}}' > third_party_config.json
+
+      - name: Build with PyInstaller
+        run: python -m PyInstaller --noconfirm --clean JAV_SCRAPER_win.spec
+
+      # 冒烟：冻结后的 exe 能拉起并在 8 秒内保持存活（缺 DLL / 缺 hiddenimport 会秒退）
+      - name: Smoke test frozen exe
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\JAV SCRAPER\JAV SCRAPER.exe" -PassThru
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) { throw "exe exited early with code $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+          Get-ChildItem "$env:APPDATA\JAV SCRAPER\logs" -ErrorAction SilentlyContinue | ForEach-Object { Get-Content $_.FullName }
+
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path 'dist\JAV SCRAPER' -DestinationPath "dist\$env:ZIP" -CompressionLevel Optimal
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP }}
+          path: dist/${{ env.ZIP }}
+          if-no-files-found: error
+
+  macos:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15          # Apple Silicon
+          - arch: x86_64
+            runner: macos-15-intel    # Intel
+    runs-on: ${{ matrix.runner }}
+    env:
+      DMG: JAV_SCRAPER_v${{ needs.version.outputs.version }}_macOS_${{ matrix.arch }}.dmg
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install "pyinstaller>=6.0" pytest
+
+      - name: Run tests
+        run: python3 -m pytest tests/ -q
+
+      - name: Verify runner architecture
+        run: |
+          echo "uname -m: $(uname -m)"
+          [ "$(uname -m)" = "${{ matrix.arch }}" ] || { echo "runner arch mismatch"; exit 1; }
+
+      # 复用本地同一套脚本，CI 与手工打包产物一致
+      - name: Build .app
+        run: bash build_mac.sh
+
+      # 冒烟：.app 能拉起并保持存活 8 秒
+      - name: Smoke test .app
+        run: |
+          open "dist/JAV SCRAPER.app"
+          sleep 8
+          pgrep -f "JAV SCRAPER.app/Contents/MacOS" > /dev/null || { echo ".app exited early"; cat "$HOME/Library/Application Support/JAV SCRAPER/logs/app.log" 2>/dev/null; exit 1; }
+          pkill -f "JAV SCRAPER.app/Contents/MacOS" || true
+          cat "$HOME/Library/Application Support/JAV SCRAPER/logs/app.log" 2>/dev/null || true
+
+      - name: Build DMG
+        run: DMG_NAME="$DMG" bash build_dmg.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DMG }}
+          path: dist/${{ env.DMG }}
+          if-no-files-found: error
+
+  # 只有三个包全部成功才发布，避免出现"只有一半平台"的 Release
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [version, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - run: ls -la artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true

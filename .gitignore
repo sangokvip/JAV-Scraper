@@ -62,3 +62,5 @@ malicious_code.nfo
 # 构建产物
 icon.icns
 icon.ico
+version_info.txt
+*.zip

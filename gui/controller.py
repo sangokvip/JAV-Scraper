@@ -29,6 +29,7 @@ from gui import task_status as TS
 
 # 导入公共辅助类
 from helpers.subtitle_helper import find_matching_subtitles
+from helpers.player_helper import FILE_MANAGER_OPEN_LABEL
 from helpers.duplicate_detector import build_organized_code_index
 from helpers.player_helper import play_video, open_local_folder
 from helpers.template_helper import format_target_path
@@ -789,7 +790,7 @@ class Controller:
             is_organized = TS.is_success(self.task_files[filepath]["status"])
             
             action_play = menu.addAction("播放归档影片")
-            action_open = menu.addAction("在 Finder 中打开文件夹")
+            action_open = menu.addAction(FILE_MANAGER_OPEN_LABEL)
             action_play.setEnabled(is_organized)
             action_open.setEnabled(is_organized)
 

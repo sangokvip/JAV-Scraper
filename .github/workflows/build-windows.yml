@@ -1,0 +1,80 @@
+name: Build Windows
+
+# 触发方式：
+#   1. 手动：Actions 页面 → Build Windows → Run workflow（产物在本次运行的 Artifacts 里）
+#   2. 打 tag：git tag v2.3.0 && git push origin v2.3.0 → 自动创建 GitHub Release 并附上 zip
+#   3. Pull Request：合并前先在 Windows 上验证测试与打包（产物同样在 Artifacts 里）
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install "pyinstaller>=6.0" pytest
+
+      # 单元测试在 Windows 上跑一遍：路径分隔符 / 非法字符 / 原子写等平台差异先于打包暴露
+      - name: Run tests on Windows
+        run: python -m pytest tests/ -q
+
+      - name: Read app version
+        id: ver
+        shell: bash
+        run: |
+          VER=$(python -c "import re;print(re.search(r'APP_VERSION\s*=\s*.([0-9.]+)',open('config.py',encoding='utf-8').read()).group(1))")
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "APP_VERSION=$VER"
+
+      - name: Generate icons and placeholder configs
+        shell: bash
+        run: |
+          python convert_icon.py
+          [ -f cookies.json ] || echo '{}' > cookies.json
+          [ -f third_party_config.json ] || echo '{"default_adapter": "javdb", "adapters": {"javdb": {"enabled": true, "domain_index": 0}}}' > third_party_config.json
+
+      - name: Build with PyInstaller
+        run: python -m PyInstaller --noconfirm --clean JAV_SCRAPER_win.spec
+
+      # 冒烟：冻结后的 exe 能拉起并在 8 秒内保持存活（缺 DLL / 缺 hiddenimport 会秒退）
+      - name: Smoke test frozen exe
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\JAV SCRAPER\JAV SCRAPER.exe" -PassThru
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) { throw "exe exited early with code $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+          Get-ChildItem "$env:APPDATA\JAV SCRAPER\logs" -ErrorAction SilentlyContinue | ForEach-Object { Get-Content $_.FullName }
+
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path 'dist\JAV SCRAPER' -DestinationPath "dist\JAV_SCRAPER_v${{ steps.ver.outputs.version }}_windows_x64.zip" -CompressionLevel Optimal
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JAV_SCRAPER_v${{ steps.ver.outputs.version }}_windows_x64
+          path: dist/JAV_SCRAPER_v${{ steps.ver.outputs.version }}_windows_x64.zip
+          if-no-files-found: error
+
+      - name: Publish release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/JAV_SCRAPER_v${{ steps.ver.outputs.version }}_windows_x64.zip
+          generate_release_notes: true

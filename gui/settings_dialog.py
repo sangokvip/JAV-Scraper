@@ -5,6 +5,7 @@
 由 Controller 负责读取、应用与保存。
 """
 import os
+import sys
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QLineEdit,
@@ -57,8 +58,15 @@ class SettingsDialog(QDialog):
         layout.addWidget(buttons)
 
     def _browse_player(self):
-        start_dir = "/Applications" if os.path.isdir("/Applications") else ""
-        path, _ = QFileDialog.getOpenFileName(self, "选择播放器程序", start_dir)
+        if sys.platform == 'win32':
+            start_dir = os.environ.get("ProgramFiles", "C:\\Program Files")
+            filters = "可执行程序 (*.exe);;所有文件 (*)"
+        elif sys.platform == 'darwin':
+            start_dir = "/Applications" if os.path.isdir("/Applications") else ""
+            filters = "应用程序 (*.app);;所有文件 (*)"
+        else:
+            start_dir, filters = "", "所有文件 (*)"
+        path, _ = QFileDialog.getOpenFileName(self, "选择播放器程序", start_dir, filters)
         if path:
             self.player_input.setText(path)
 

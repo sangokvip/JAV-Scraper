@@ -5,6 +5,14 @@ from lib.logger import get_logger
 
 log = get_logger(__name__)
 
+# 右键菜单文案：按平台称呼系统文件管理器
+if sys.platform == 'win32':
+    FILE_MANAGER_OPEN_LABEL = "在资源管理器中打开文件夹"
+elif sys.platform == 'darwin':
+    FILE_MANAGER_OPEN_LABEL = "在 Finder 中打开文件夹"
+else:
+    FILE_MANAGER_OPEN_LABEL = "在文件管理器中打开文件夹"
+
 def open_local_folder(path: str) -> bool:
     """
     在系统的文件管理器中打开指定的物理文件夹或文件所在的父目录。

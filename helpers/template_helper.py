@@ -1,5 +1,30 @@
 import os
 import re
+import sys
+
+# Windows 保留设备名：即使加了扩展名（如 "CON.txt"）也不能作为文件/目录名
+_WIN_RESERVED = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
+
+# Windows 经典 MAX_PATH 为 260；留出文件名（如 ABC-123-CD1.mp4 / extrafanart/fanart10.jpg）的余量
+_WIN_MAX_DIR_LEN = 200
+
+
+def clean_path_component(val: str) -> str:
+    """
+    把一个路径分量清洗成三大平台都合法的目录名：
+    - 替换 \ / : * ? " < > | 与控制字符（Windows 全部非法，POSIX 至少 / 非法）
+    - 去掉首尾空白与结尾的 . （Windows 会静默截掉结尾的点/空格，导致路径不一致）
+    - 命中 Windows 保留设备名时加下划线前缀
+    """
+    val = re.sub(r'[\\/:*?"<>|\x00-\x1f]', " ", str(val))
+    val = val.strip().rstrip(". ")
+    if val.split(".")[0].upper() in _WIN_RESERVED:
+        val = "_" + val
+    return val
 
 def format_target_path(template: str, output_dir: str, code: str, detail: dict) -> str:
     """
@@ -34,12 +59,6 @@ def format_target_path(template: str, output_dir: str, code: str, detail: dict) 
         if match:
             year = match.group(0)
             
-    # 文件系统非法路径字符清洗
-    def clean_path_component(val: str) -> str:
-        for char in r'\/:*?"<>|':
-            val = val.replace(char, " ")
-        return val.strip()
-        
     actor_clean = clean_path_component(actor) or "未知演员"
     studio_clean = clean_path_component(studio) or "未知片商"
     title_clean = clean_path_component(title) or "未知标题"
@@ -74,7 +93,9 @@ def format_target_path(template: str, output_dir: str, code: str, detail: dict) 
     # 兼容斜杠和反斜杠分割
     split_parts = re.split(r'[\\/]', path_rel)
     for p in split_parts:
-        p_clean = p.strip()
+        # 模板里用户手写的字面量（如 "我的收藏."）同样要过一遍清洗，
+        # 否则 Windows 上会得到与预期不一致的目录名
+        p_clean = clean_path_component(p)
         if not p_clean or p_clean in ('.', '..'):
             continue
         parts.append(p_clean)
@@ -83,8 +104,16 @@ def format_target_path(template: str, output_dir: str, code: str, detail: dict) 
         parts = [f"[{code_clean}] {title_clean}"]
         
     # 最后一级目录进行最大安全长度截断，防止超出系统限制 (建议截断至 80 字符)
-    parts[-1] = parts[-1][:80].strip()
-    
+    parts[-1] = parts[-1][:80].rstrip(". ").strip()
+
     # 拼接并生成最终绝对路径
     target_folder = os.path.abspath(os.path.join(output_dir, *parts))
+
+    # Windows 未开启长路径支持时整条路径不能超过 260 字符；
+    # 保存路径本身很深（如 D:\影片库\整理\...）时继续压缩最后一级目录
+    if sys.platform == "win32" and len(target_folder) > _WIN_MAX_DIR_LEN:
+        overflow = len(target_folder) - _WIN_MAX_DIR_LEN
+        keep = max(len(parts[-1]) - overflow, len(code_clean) + 2)
+        parts[-1] = parts[-1][:keep].rstrip(". ").strip()
+        target_folder = os.path.abspath(os.path.join(output_dir, *parts))
     return target_folder

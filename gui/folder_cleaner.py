@@ -25,6 +25,7 @@ def clean_empty_parent_dirs(parent_dirs) -> list[str]:
         os.path.abspath(os.path.join(user_home, "Documents")),
         os.path.abspath(os.path.join(user_home, "Downloads")),
         os.path.abspath(os.path.join(user_home, "Movies")),
+        os.path.abspath(os.path.join(user_home, "Videos")),
         os.path.abspath(os.path.join(user_home, "Pictures")),
         os.path.abspath(os.path.join(user_home, "Music")),
     }
@@ -40,7 +41,9 @@ def clean_empty_parent_dirs(parent_dirs) -> list[str]:
             continue
             
         # 2. 安全验证：如果是敏感路径或者路径太短（长度小于等于10，防御根目录），则屏蔽
-        if abs_pdir in sensitive_paths or len(abs_pdir) <= 10:
+        # 任何文件系统根（/、C:\、D:\ 等盘符根）一律不碰
+        is_fs_root = os.path.dirname(abs_pdir) == abs_pdir
+        if abs_pdir in sensitive_paths or is_fs_root or len(abs_pdir) <= 10:
             continue
             
         try:

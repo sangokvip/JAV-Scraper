@@ -165,3 +165,30 @@ def test_subtitle_move_returns_pairs(tmp_path):
     moved = move_and_rename_subtitles(str(video), str(dst_dir / "ABC-123.mp4"), subs)
     assert moved == [(str(sub), str(dst_dir / "ABC-123.zh-CN.srt"))]
     assert (dst_dir / "ABC-123.zh-CN.srt").exists()
+
+
+def test_clean_path_component_windows_rules():
+    from helpers.template_helper import clean_path_component
+    # Windows 非法字符与结尾点/空格
+    assert clean_path_component('a:b*c?d"e<f>g|h') == "a b c d e f g h"
+    assert clean_path_component("Mr. Nice...") == "Mr. Nice"
+    assert clean_path_component("  trailing space  ") == "trailing space"
+    # 保留设备名（含带扩展名形式）
+    assert clean_path_component("CON") == "_CON"
+    assert clean_path_component("com1.txt") == "_com1.txt"
+    assert clean_path_component("CONSOLE") == "CONSOLE"
+    # 控制字符
+    assert clean_path_component("a\x00b\x1fc") == "a b c"
+
+
+def test_format_target_path_template_literal_cleaned(tmp_path):
+    detail = {"actors": ["A"], "title": "T", "date": ""}
+    path = format_target_path("收藏./{code}", str(tmp_path), "ABC-1", detail)
+    parts = os.path.relpath(path, str(tmp_path)).split(os.sep)
+    assert parts == ["收藏", "ABC-1"]
+
+
+def test_format_target_path_no_trailing_dot_after_truncate(tmp_path):
+    detail = {"actors": ["A"], "title": "x" * 78 + "..", "date": ""}
+    path = format_target_path("{title}", str(tmp_path), "ABC-1", detail)
+    assert not os.path.basename(path).endswith(".")

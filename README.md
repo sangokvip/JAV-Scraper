@@ -61,8 +61,11 @@
 * **运行方式**：双击直接打开内置的一键 DMG 磁盘映像文件安装，拖入“应用程序”文件夹即可使用。
 * **特点**：**无需配置 Python 环境，零依赖，双击即用**。已在打包中配置了 CFBundle 描述信息，完美适配 macOS 隐私权限管理（支持文档、下载、桌面、网络共享卷/NAS 和移动硬盘的物理访问）。
 
-### 3. Windows 独立运行版 (.exe)
-* **运行方式**：通过内置的打包脚本，在一台 Windows 电脑上运行即可编译生成单文件 `.exe` 可执行程序，双击即用。
+### 3. Windows 独立运行版 (.exe，免安装绿色版)
+* **适用平台**：Windows 10 / 11（64 位）
+* **获取方式**：到本仓库的 [Releases](https://github.com/sangokvip/JAV-Scraper/releases) 页面下载 `JAV_SCRAPER_v<版本>_windows_x64.zip`，解压后双击 `JAV SCRAPER.exe` 即可，**无需安装 Python**。
+* **首次运行提示**：程序未做代码签名，SmartScreen 可能弹出「Windows 已保护你的电脑」，点击「更多信息 → 仍要运行」即可。
+* **数据目录**：设置、任务备份、日志保存在 `%APPDATA%\JAV SCRAPER\`（日志在其下 `logs\app.log`，反馈问题时可附上）。
 
 ---
 
@@ -114,11 +117,24 @@ python3 main.py
    打包成功后，可在 **`dist/`** 目录下获取 **`JAV_SCRAPER_macOS.dmg`** 映像文件。
 
 ### Windows 平台打包
-在 Windows 终端中运行或直接双击项目根目录下的：
+
+**方式一：GitHub Actions 云端构建（推荐，不需要 Windows 电脑）**
+
+仓库内置 [`.github/workflows/build-windows.yml`](.github/workflows/build-windows.yml)：
+* 在 GitHub 的 **Actions → Build Windows → Run workflow** 手动触发，构建完成后在该次运行的 **Artifacts** 里下载 zip；
+* 或推送版本 tag 自动发布到 Releases：
+  ```bash
+  git tag v2.3.0 && git push origin v2.3.0
+  ```
+流程会先在 Windows 上跑一遍单元测试，再用 PyInstaller 打包、冒烟启动 exe 并压缩成 `JAV_SCRAPER_v<版本>_windows_x64.zip`。
+
+**方式二：本机打包**
+
+在 Windows 上安装 Python 3.10 ~ 3.12（64 位，勾选 Add to PATH）后，双击或在终端运行：
 ```bat
 build_win.bat
 ```
-脚本会自动配置 Windows 依赖并编译生成免安装的 `.exe` 独立应用程序，输出于 `dist/` 目录。
+脚本会自动安装依赖与 PyInstaller，生成图标，按 [`JAV_SCRAPER_win.spec`](JAV_SCRAPER_win.spec) 打包到 `dist\JAV SCRAPER\`，并压缩出同名 zip。exe 的「属性 → 详细信息」中会显示与 `config.APP_VERSION` 一致的版本号。
 
 ---
 

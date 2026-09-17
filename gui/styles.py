@@ -6,7 +6,7 @@ STYLE_SHEET = """
     }
     QWidget {
         color: #1A1C2E;
-        font-family: "Inter", "SF Pro Display", "PingFang SC", "Segoe UI", sans-serif;
+        font-family: "Inter", "SF Pro Display", "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
         font-size: 13px;
     }
     #LeftPanel, #RightPanel {

@@ -96,14 +96,21 @@
   },
   "knownLimitations": [
     "已生成的错误 NFO、旧目录名和任务备份中的详情不会被自动改写，更新后需主动重新刮削并重新整理；测试未移动用户实际影片。",
-    "尚未构建 Windows EXE，也未完成 Windows 实机验证。",
+    "后续已通过 GitHub Actions 构建 Windows EXE 和两种 macOS DMG，并完成启动冒烟检查；尚未在用户 Windows 环境人工验证完整流程。",
     "截图的 {rawtitle} 不是受支持变量，现有替换规则会留下 raw 字样；建议改为 {title}。此独立模板问题未修改代码。",
     "当前日期和演员提取依赖中文标签，英文站点模式支持问题未在本次扩展。"
   ],
   "deploymentNotes": [
-    "仅完成本地源码修复与验证，未提交、推送、打 tag、发布或回复 issue。",
+    "初次修复时仅本地验证；后续按用户授权提交 adf7524、推送 main 与 v2.3.2 标签并发布，详见 releaseFollowUp。",
     "无需改动用户配置；新版本首次刮削会绕过旧磁盘缓存。",
     "实际线上 HTML 只保存在临时目录，未将完整页面、附件图像或个人信息写入 Git；仓库夹具使用脱敏模拟内容。",
-    "本记录写入 docs/worklogs，当前仓库 .gitignore 忽略 /docs，默认不会包含在 Git 提交中。"
-  ]
+    "本记录位于被 /docs 忽略的路径，已定向强制加入本次修复提交；未调整全局忽略规则。"
+  ],
+  "releaseFollowUp": {
+    "status": "已按后续用户授权完成提交、推送及正式发布",
+    "version": "2.3.2",
+    "releaseUrl": "https://github.com/sangokvip/JAV-Scraper/releases/tag/v2.3.2",
+    "worklog": "docs/worklogs/2026-10-22-v2-3-2-release.json",
+    "validation": "三个平台各 48 项测试、构建及启动冒烟检查通过。"
+  }
 }

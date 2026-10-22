@@ -1,0 +1,355 @@
+{
+  "schemaVersion": 1,
+  "worklogId": "2026-10-22-v2-3-2-release",
+  "date": "2026-10-22",
+  "summary": "已将标题解析修复提交并推送至 GitHub，发布 v2.3.2；Windows、macOS Apple Silicon、macOS Intel 均完成测试、打包及启动冒烟检查，三份安装包已上传至正式 Release。",
+  "trigger": "用户明确要求提交、推送修复，并重新打包 Windows 和 macOS 后发布新版本。",
+  "changes": [
+    {
+      "category": "修复发布",
+      "files": [
+        "javdb_api.py",
+        "lib/detail_cache.py",
+        "tests/fixtures/detail_page.html",
+        "tests/test_helpers.py",
+        "tests/test_javdb_parser.py"
+      ],
+      "description": "发布已验证的详情主标题解析修复、推荐卡片隔离、旧缓存失效和回归测试。",
+      "reason": "解决 issue #3 中标题与影片不符的问题。"
+    },
+    {
+      "category": "版本与构建说明",
+      "files": [
+        "config.py",
+        "README.md",
+        ".github/workflows/build.yml"
+      ],
+      "description": "版本升至 2.3.2，同步 README 发版命令及工作流注释；沿用既有三平台自动构建与发布流程。",
+      "reason": "确保应用窗口、安装包及发布标签版本一致。"
+    },
+    {
+      "category": "工作记录",
+      "files": [
+        "docs/worklogs/2026-10-22-detail-title-selector-fix.json",
+        "docs/worklogs/2026-10-22-v2-3-2-release.json"
+      ],
+      "description": "提交修复记录，补充本次远端提交、构建、测试和发布验证结果。",
+      "reason": "记录已执行发布操作与安装包来源。"
+    }
+  ],
+  "validation": [
+    {
+      "command": "git fetch origin --prune；git log HEAD..origin/main；git ls-remote origin",
+      "result": "发布前 main 与远端一致；v2.3.2 标签不存在，无覆盖已有版本。"
+    },
+    {
+      "command": "python3 -m pytest tests/ -q",
+      "result": "本地 48 项测试通过，8 条 BeautifulSoup/lxml 弃用警告。"
+    },
+    {
+      "command": "python3 -m compileall -q javdb_api.py lib/detail_cache.py config.py tests/test_javdb_parser.py tests/test_helpers.py；git diff --check",
+      "result": "语法编译及差异格式检查通过。"
+    },
+    {
+      "command": "git commit；git tag -a v2.3.2；git push --atomic origin main v2.3.2；git ls-remote origin",
+      "result": "修复提交 adf7524c9c0af38323859cad6bd0a025f6ce2491 已推送至 main，远端注解标签解析至同一修复提交。"
+    },
+    {
+      "command": "gh run watch 39747843734 --exit-status；gh run view --json；gh run view --log",
+      "result": "工作流全部成功；Windows、macOS Apple Silicon、macOS Intel 日志分别确认 48 项测试通过；三平台打包、启动冒烟检查、产物上传及 Release 任务全部成功。"
+    },
+    {
+      "command": "gh release edit v2.3.2 --notes-file；gh api repos/sangokvip/JAV-Scraper/releases/tags/v2.3.2",
+      "result": "发布中文标题、修复说明、升级注意事项和下载平台指引；设为最新正式版本；三份附件名称正确、状态均为已上传、大小均大于零，并有服务端 SHA-256 摘要。"
+    },
+    {
+      "command": "JSON 解析与工作记录提交",
+      "result": "两份本次工作记录通过 json.loads 校验；仅定向强制添加被 /docs 忽略的本次记录，未修改其他历史记录或忽略规则。"
+    }
+  ],
+  "git": {
+    "releaseCommit": "adf7524c9c0af38323859cad6bd0a025f6ce2491",
+    "tag": "v2.3.2",
+    "branch": "main",
+    "remote": "https://github.com/sangokvip/JAV-Scraper.git"
+  },
+  "build": {
+    "runId": 39747843734,
+    "url": "https://github.com/sangokvip/JAV-Scraper/actions/runs/39747843734",
+    "status": "成功",
+    "jobs": [
+      {
+        "name": "version",
+        "status": "成功",
+        "testCount": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "成功"
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "status": "成功"
+          },
+          {
+            "name": "Run VER=$(python3 -c \"import re;print(re.search(r'APP_VERSION\\s*=\\s*.([0-9.]+)',open('config.py',encoding='utf-8').read()).group(1))\")",
+            "status": "成功"
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "status": "成功"
+          },
+          {
+            "name": "Complete job",
+            "status": "成功"
+          }
+        ]
+      },
+      {
+        "name": "windows",
+        "status": "成功",
+        "testCount": 48,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "成功"
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "status": "成功"
+          },
+          {
+            "name": "Run actions/setup-python@v5",
+            "status": "成功"
+          },
+          {
+            "name": "Install dependencies",
+            "status": "成功"
+          },
+          {
+            "name": "Run tests",
+            "status": "成功"
+          },
+          {
+            "name": "Generate icons and placeholder configs",
+            "status": "成功"
+          },
+          {
+            "name": "Build with PyInstaller",
+            "status": "成功"
+          },
+          {
+            "name": "Smoke test frozen exe",
+            "status": "成功"
+          },
+          {
+            "name": "Zip",
+            "status": "成功"
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "status": "成功"
+          },
+          {
+            "name": "Post Run actions/setup-python@v5",
+            "status": "成功"
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "status": "成功"
+          },
+          {
+            "name": "Complete job",
+            "status": "成功"
+          }
+        ]
+      },
+      {
+        "name": "macos (x86_64, macos-15-intel)",
+        "status": "成功",
+        "testCount": 48,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "成功"
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "status": "成功"
+          },
+          {
+            "name": "Run actions/setup-python@v5",
+            "status": "成功"
+          },
+          {
+            "name": "Install dependencies",
+            "status": "成功"
+          },
+          {
+            "name": "Run tests",
+            "status": "成功"
+          },
+          {
+            "name": "Verify runner architecture",
+            "status": "成功"
+          },
+          {
+            "name": "Build .app",
+            "status": "成功"
+          },
+          {
+            "name": "Smoke test .app",
+            "status": "成功"
+          },
+          {
+            "name": "Build DMG",
+            "status": "成功"
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "status": "成功"
+          },
+          {
+            "name": "Post Run actions/setup-python@v5",
+            "status": "成功"
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "status": "成功"
+          },
+          {
+            "name": "Complete job",
+            "status": "成功"
+          }
+        ]
+      },
+      {
+        "name": "macos (arm64, macos-15)",
+        "status": "成功",
+        "testCount": 48,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "成功"
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "status": "成功"
+          },
+          {
+            "name": "Run actions/setup-python@v5",
+            "status": "成功"
+          },
+          {
+            "name": "Install dependencies",
+            "status": "成功"
+          },
+          {
+            "name": "Run tests",
+            "status": "成功"
+          },
+          {
+            "name": "Verify runner architecture",
+            "status": "成功"
+          },
+          {
+            "name": "Build .app",
+            "status": "成功"
+          },
+          {
+            "name": "Smoke test .app",
+            "status": "成功"
+          },
+          {
+            "name": "Build DMG",
+            "status": "成功"
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "status": "成功"
+          },
+          {
+            "name": "Post Run actions/setup-python@v5",
+            "status": "成功"
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "status": "成功"
+          },
+          {
+            "name": "Complete job",
+            "status": "成功"
+          }
+        ]
+      },
+      {
+        "name": "release",
+        "status": "成功",
+        "testCount": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "成功"
+          },
+          {
+            "name": "Run actions/download-artifact@v4",
+            "status": "成功"
+          },
+          {
+            "name": "Run ls -la artifacts",
+            "status": "成功"
+          },
+          {
+            "name": "Run softprops/action-gh-release@v2",
+            "status": "成功"
+          },
+          {
+            "name": "Complete job",
+            "status": "成功"
+          }
+        ]
+      }
+    ]
+  },
+  "release": {
+    "version": "2.3.2",
+    "url": "https://github.com/sangokvip/JAV-Scraper/releases/tag/v2.3.2",
+    "title": "v2.3.2 — 修复刮削标题错误",
+    "status": "已发布正式版本",
+    "publishedAt": "2026-10-22T16:30:46+08:00",
+    "assets": [
+      {
+        "name": "JAV_SCRAPER_v2.3.2_macOS_arm64.dmg",
+        "sizeBytes": 57364318,
+        "sha256": "sha256:697e54bb65a49b4bb6d2e16a30447801d371318a3c935b43ce55ff33d8a9ac24",
+        "url": "https://github.com/sangokvip/JAV-Scraper/releases/download/v2.3.2/JAV_SCRAPER_v2.3.2_macOS_arm64.dmg",
+        "status": "已上传"
+      },
+      {
+        "name": "JAV_SCRAPER_v2.3.2_macOS_x86_64.dmg",
+        "sizeBytes": 63086259,
+        "sha256": "sha256:b4403e1469508afa8bfa4fb9eb71a826c2e1154061f598546d81ede5947173a9",
+        "url": "https://github.com/sangokvip/JAV-Scraper/releases/download/v2.3.2/JAV_SCRAPER_v2.3.2_macOS_x86_64.dmg",
+        "status": "已上传"
+      },
+      {
+        "name": "JAV_SCRAPER_v2.3.2_windows_x64.zip",
+        "sizeBytes": 63391579,
+        "sha256": "sha256:f71115d1f49aafdfce3defbd9404b99940cbb97d5d8ea034f1be21cb42197053",
+        "url": "https://github.com/sangokvip/JAV-Scraper/releases/download/v2.3.2/JAV_SCRAPER_v2.3.2_windows_x64.zip",
+        "status": "已上传"
+      }
+    ]
+  },
+  "knownLimitations": [
+    "GitHub Actions 已完成三平台启动冒烟检查，但不等同于在用户 Windows 环境对完整刮削与文件整理流程进行人工测试。",
+    "旧 NFO、目录和任务备份不会自动改写；升级后需重新刮削并重新整理错误记录。",
+    "构建出现 GitHub Actions 依赖 Node.js 版本弃用等平台警告，未导致失败；未在本次发布扩展工作流升级。"
+  ],
+  "deploymentNotes": [
+    "正式 Release 地址：https://github.com/sangokvip/JAV-Scraper/releases/tag/v2.3.2。",
+    "三个安装包全部来自同一标签、同一修复提交的 GitHub Actions 构建。",
+    "本次发布工作记录在发布后另行提交至 main，仅修改文档，不移动发布标签或重建安装包。",
+    "未向 issue 发送评论，未修改用户配置、Cookie、影片或现有归档。"
+  ]
+}

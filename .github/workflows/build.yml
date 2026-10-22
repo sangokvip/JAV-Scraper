@@ -2,7 +2,7 @@ name: Build
 
 # 触发方式：
 #   1. 手动：Actions 页面 → Build → Run workflow（产物在本次运行的 Artifacts 里）
-#   2. 打 tag：git tag v2.3.1 && git push origin v2.3.1 → 三个平台包全部构建完成后统一创建 GitHub Release
+#   2. 打 tag：git tag v2.3.2 && git push origin v2.3.2 → 三个平台包全部构建完成后统一创建 GitHub Release
 #   3. Pull Request：合并前先在 Windows / macOS 上验证测试与打包
 on:
   workflow_dispatch:

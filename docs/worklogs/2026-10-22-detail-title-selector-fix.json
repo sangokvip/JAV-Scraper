@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "worklogId": "2026-10-22-detail-title-selector-fix",
+  "date": "2026-10-22",
+  "summary": "依据 issue #3 的 ADN-813 样例及实际详情页 HTML，确认旧标题选择器误取推荐影片标题，已修复并隔离旧磁盘缓存。",
+  "trigger": "用户补充 5 张截图，其中图 3、4、5 为反馈者附件：同一番号的界面、目录和 NFO 标题错误，其余主要元数据正确。",
+  "rootCause": {
+    "description": "真实详情主标题位于 h2.title.is-4，旧选择器仅支持 h1.title，随后读取首个 .video-title；该节点属于另一影片的推荐卡片。旧方法在真实页面上取得的错误标题开头与用户 NFO 截图一致。其他字段分别解析，因此仍可正确。",
+    "platformScope": "解析代码由各平台共用，问题不是 Windows 独有。",
+    "evidenceUrls": [
+      "https://github.com/sangokvip/JAV-Scraper/issues/3#issuecomment-6318840225",
+      "https://javdb570.com/v/Rk83ep?locale=zh"
+    ]
+  },
+  "changes": [
+    {
+      "category": "标题与番号解析",
+      "files": [
+        "javdb_api.py"
+      ],
+      "description": "优先支持 h2.title，保留旧 h1 标题兼容，移除详情提取对推荐卡片 .video-title 的回退，规范节点之间空格并跳过空标题；番号缺少复制按钮时也只读取详情主标题。",
+      "reason": "从详情主体提取标题和番号，避免混入推荐影片信息。"
+    },
+    {
+      "category": "缓存兼容",
+      "files": [
+        "lib/detail_cache.py"
+      ],
+      "description": "磁盘缓存文件加入版本前缀 v2，使旧版错误标题缓存不再命中；保留旧文件，不删除用户数据。",
+      "reason": "旧缓存最长存留 7 天，单改解析器会导致升级后仍显示历史错误标题。"
+    },
+    {
+      "category": "回归测试",
+      "files": [
+        "tests/test_javdb_parser.py",
+        "tests/test_helpers.py",
+        "tests/fixtures/detail_page.html"
+      ],
+      "description": "新增 7 项测试用例，覆盖 h1/h2、推荐卡片干扰、文档标题回退、标题缺失、无复制按钮番号、标题写入目录和 NFO，以及旧缓存隔离；夹具更新为 h2 与模拟推荐卡片；解析测试使用无会话实例，不加载用户 Cookie，通过公共 lib 导入避免单独运行时遇到已有循环导入。",
+      "reason": "将已确认的线上结构及数据输出过程纳入测试。测试夹具为脱敏模拟内容，不是完整线上快照。"
+    }
+  ],
+  "validation": [
+    {
+      "command": "只读获取 GitHub issue #3 的全部评论",
+      "result": "确认反馈者表示界面、目录和 NFO 均有错误，提供案例 ZIP；未发布评论或修改 issue。"
+    },
+    {
+      "command": "匿名请求 https://javdb570.com/v/Rk83ep 及 ?locale=zh",
+      "result": "镜像站两次返回 HTTP 200，确认 h2.title 与首个推荐卡片结构。主站请求超时，网页工具及内置浏览器均未成功取得页面。未使用用户 Cookie 或账号凭证。"
+    },
+    {
+      "command": "修复前 python3 -m pytest tests/ -q",
+      "result": "新增初始 5 项回归用例全部失败，原有 41 项通过，复现误取推荐标题等问题。"
+    },
+    {
+      "command": "修复后 python3 -m pytest tests/ -q",
+      "result": "48 项全部通过；8 条警告均为 BeautifulSoup/lxml 的 strip_cdata 弃用警告。"
+    },
+    {
+      "command": "python3 -m pytest tests/test_javdb_parser.py -q",
+      "result": "19 项全部通过，可单独执行解析测试。"
+    },
+    {
+      "command": "python3 -m compileall -q javdb_api.py lib/detail_cache.py tests/test_javdb_parser.py tests/test_helpers.py",
+      "result": "语法编译检查通过。"
+    },
+    {
+      "command": "git diff --check",
+      "result": "通过。"
+    },
+    {
+      "command": "从 HEAD 提取旧 _extract_title 方法，与修复版本在实际繁体详情 HTML 上对照，使用临时目录验证 NFO 与目录生成",
+      "result": "10 项断言全部通过，结果见 livePageValidation。英文匿名页面的日期和演员标签不能被现有中文解析规则识别，改用站点明确支持的 locale=zh 请求后，标题、番号、日期、演员与截图对照均通过；未扩展无关的语言解析。"
+    },
+    {
+      "command": "浏览器与 Windows 可执行文件验证",
+      "result": "内置浏览器访问详情页超时；未在 Windows 上运行或打包，未修改界面布局，暂无 GUI 截图验证。"
+    },
+    {
+      "command": "工作记录 JSON 校验",
+      "result": "json.loads 解析通过。"
+    }
+  ],
+  "livePageValidation": {
+    "旧解析结果与首个推荐卡片相同": true,
+    "旧标题与用户截图的错误前缀一致": true,
+    "新标题与真实详情主标题一致": true,
+    "新旧标题不同": true,
+    "番号正确": true,
+    "发行日期与截图一致": true,
+    "演员与截图一致": true,
+    "真实页面标题正确写入 NFO": true,
+    "目录未含旧推荐标题": true,
+    "目录含正确主标题前缀": true
+  },
+  "knownLimitations": [
+    "已生成的错误 NFO、旧目录名和任务备份中的详情不会被自动改写，更新后需主动重新刮削并重新整理；测试未移动用户实际影片。",
+    "尚未构建 Windows EXE，也未完成 Windows 实机验证。",
+    "截图的 {rawtitle} 不是受支持变量，现有替换规则会留下 raw 字样；建议改为 {title}。此独立模板问题未修改代码。",
+    "当前日期和演员提取依赖中文标签，英文站点模式支持问题未在本次扩展。"
+  ],
+  "deploymentNotes": [
+    "仅完成本地源码修复与验证，未提交、推送、打 tag、发布或回复 issue。",
+    "无需改动用户配置；新版本首次刮削会绕过旧磁盘缓存。",
+    "实际线上 HTML 只保存在临时目录，未将完整页面、附件图像或个人信息写入 Git；仓库夹具使用脱敏模拟内容。",
+    "本记录写入 docs/worklogs，当前仓库 .gitignore 忽略 /docs，默认不会包含在 Git 提交中。"
+  ]
+}

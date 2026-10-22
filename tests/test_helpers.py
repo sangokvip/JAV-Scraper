@@ -57,6 +57,16 @@ def test_detail_cache_ttl(monkeypatch, tmp_path):
     assert detail_cache.get("javdb", "ABC-123") is None
 
 
+def test_detail_cache_ignores_legacy_titles(monkeypatch, tmp_path):
+    monkeypatch.setattr(detail_cache, "CACHE_DIR", tmp_path)
+    legacy = tmp_path / "javdb_ADN-813.json"
+    legacy.write_text(json.dumps({"title": "误取的推荐标题"}), encoding="utf-8")
+    assert detail_cache.get("javdb", "ADN-813") is None
+    detail_cache.put("javdb", "ADN-813", {"title": "详情主标题"})
+    assert detail_cache.get("javdb", "ADN-813") == {"title": "详情主标题"}
+    assert legacy.exists()  # 只隔离旧缓存，不删除用户数据。
+
+
 # ---------- rate_limiter ----------
 
 def test_rate_limiter_spacing():

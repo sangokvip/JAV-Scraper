@@ -13,11 +13,13 @@ import config
 
 CACHE_DIR = config.DATA_DIR / "detail_cache"
 TTL_SECONDS = 7 * 86400  # 7 天：元数据基本不变，磁力/评分允许一周内滞后
+# 解析规则变化后隔离旧缓存，避免继续使用误取的推荐影片标题。
+CACHE_VERSION = 2
 
 
 def _cache_path(platform: str, code: str):
     safe = re.sub(r'[^A-Za-z0-9_-]', '_', f"{platform}_{code.upper()}")
-    return CACHE_DIR / f"{safe}.json"
+    return CACHE_DIR / f"v{CACHE_VERSION}_{safe}.json"
 
 
 def get(platform: str, code: str):

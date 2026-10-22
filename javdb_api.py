@@ -454,14 +454,15 @@ class JavdbAPI:
         return detail
     
     def _extract_title(self, soup: BeautifulSoup) -> str:
-        """提取标题"""
-        selectors = ['h1.title', '.video-title', 'h1', 'title']
+        """提取详情主标题，不能使用推荐影片卡片的 .video-title。"""
+        selectors = ['h2.title', 'h1.title', 'h1', 'title']
         for selector in selectors:
             elem = soup.select_one(selector)
             if elem:
-                title = elem.get_text(strip=True)
-                title = re.sub(r'\|.*$', '', title)
-                return title
+                title = elem.get_text(' ', strip=True)
+                title = re.sub(r'\|.*$', '', title).strip()
+                if title:
+                    return title
         return ""
     
     # 与 _parse_work_item 保持一致：FC2(-PPV) 优先，否则标准"字母-数字"番号
@@ -475,7 +476,7 @@ class JavdbAPI:
             if code and re.match(rf'^{self.CODE_PATTERN}$', code, re.I):
                 return code.upper()
 
-        title_elem = soup.select_one('h1.title, .video-title')
+        title_elem = soup.select_one('h2.title, h1.title')
         if title_elem:
             text = title_elem.get_text(strip=True)
             match = re.search(self.CODE_PATTERN, text, re.I)

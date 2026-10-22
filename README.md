@@ -116,7 +116,7 @@ python3 main.py
 每个平台都会先跑单元测试，再打包并冒烟启动一次。触发方式：
 * **发版**：修改 `config.py` 里的 `APP_VERSION` 后推送 tag，三个包全部成功后自动创建 Release 并附上：
   ```bash
-  git tag v2.3.1 && git push origin v2.3.1
+  git tag v2.3.2 && git push origin v2.3.2
   ```
 * **试构建**：GitHub 的 **Actions → Build → Run workflow**，产物在该次运行的 **Artifacts** 里；Pull Request 也会自动构建。
 

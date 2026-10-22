@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<!-- javdb 作品详情页结构快照：selector 变更时测试即失败，提示解析层需要跟进 -->
+<!-- 根据详情页 DOM 脱敏构造的测试夹具，包含主标题和模拟推荐卡片，非完整线上快照 -->
 <html>
 <head><title>MIDA-583 タイトルテキスト | JavDB</title></head>
 <body>
-  <h1 class="title"><strong>MIDA-583</strong> 完全なるタイトルテキスト | JavDB 成人影片数据库</h1>
+  <h2 class="title is-4"><strong>MIDA-583</strong> <strong class="current-title">完全なるタイトルテキスト | JavDB 成人影片数据库</strong></h2>
 
   <div class="panel-block first-block">
     <strong>番號:</strong>
@@ -57,5 +57,11 @@
       <span class="meta">0.5GB</span>
     </div>
   </div>
+  <!-- 脱敏模拟推荐卡片：详情标题解析不得读取这里 -->
+  <article class="message video-panel">
+    <div class="message-body"><div class="tile-images tile-small">
+      <a class="tile-item" href="/v/other"><div class="video-title">其他影片的推荐标题</div></a>
+    </div></div>
+  </article>
 </body>
 </html>
